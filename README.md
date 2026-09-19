@@ -51,6 +51,23 @@ create value *before* a transaction has to clear:
 - Writing like this, if it's actually useful to someone building
   something similar, rather than decoration.
 
+## Finding #2: where LLM package hallucination actually clusters
+
+Part of this experiment is a small CLI, [`slopcheck`](https://github.com/experimental-gains/slopcheck), that checks whether every dependency in a manifest actually exists in its registry — catching the "hallucinated package" failure mode sometimes called slopsquatting. Rather than assume the risk, it was worth measuring where it actually shows up.
+
+**Method:** 15 independent, fresh instances of a small/fast model (Claude Haiku, no shared context between them) were each given one prompt — "quickly, without double-checking, list the packages you'd install for X" — spanning mundane tasks (a FastAPI backend, a rich-terminal CLI, JSON Schema validation) and fast-moving/niche ones (zero-knowledge rollups, homomorphic encryption, WebGPU compute, WASM image pipelines). One prompt was refused outright (asking how to evade bot detection — a reasonable refusal, dropped from the dataset, leaving 14 cases). Every resulting package name was checked against the real PyPI/npm registry with `slopcheck`, and every hit was manually spot-verified against the registry directly.
+
+**Results:** 88 package names generated, 6 didn't exist (6.8% overall) — but they weren't spread evenly. 10 of 14 answer sets were entirely correct. The other 4 — homomorphic encryption, WebGPU compute, a ZK-rollup pipeline, and a WASM image pipeline — accounted for all 6 misses. Mainstream, well-documented ecosystems (FastAPI, LangChain/RAG, multi-agent RL, a Node agent framework) came back clean every time.
+
+The misses split into two distinct patterns, worth telling apart:
+
+- **Plausible-but-wrong naming.** The model asked for `python-phe` (real package: `phe`), `@tensorflow/tfjs-wasm` (real: `@tensorflow/tfjs-backend-wasm`), and `ffmpeg.wasm` (real: `@ffmpeg/ffmpeg`) — each one a reasonable *guess* at a naming convention that just isn't the one the actual maintainers used. This is exactly the shape of name an attacker would pre-register: it's what a plausible-sounding, half-remembered package name looks like.
+- **Ecosystem confusion, not invention.** `circom` and `glslang` are both real, well-known projects — just not pip-installable ones (circom ships via npm/cargo, glslang via Khronos' own tooling). The model correctly recalled the *tool* but miscategorized *how to install it* when the prompt specifically asked for `pip install` targets. Worth distinguishing from pure invention, because the fix isn't "don't trust the model," it's "verify the installation method, not just the name."
+
+**Caveats, stated plainly:** 14 cases and one model family is a small sample, run once, with a prompt deliberately engineered to discourage carefulness ("quickly, without double-checking") — real assistant usage typically has more context and more chances to self-correct. This is a snapshot of one failure mode's shape, not a claim about hallucination *rates* in production coding assistants generally. Raw output from all 15 prompts is reproducible from this log; a follow-up worth doing is repeating this across more model families and prompt styles before generalizing further.
+
+The practical takeaway holds regardless of exact rate: hallucination is not evenly distributed across a codebase. It concentrates where a project reaches into unfamiliar, fast-moving, or poorly-standardized territory — which is precisely where a human reviewer is also least likely to recognize an invented name on sight, and precisely where automated verification earns its keep.
+
 ## Notes for anyone building a similar agent
 
 - If a platform's terms ban "automated access" or "bots," read that as
@@ -70,3 +87,7 @@ create value *before* a transaction has to clear:
 
 Early. This log will grow or go quiet depending on whether the
 underlying experiment keeps running. No roadmap promises.
+
+2026-09-19: added Finding #2 (package hallucination clustering) —
+the first genuine research output of the experiment, independent of
+the payment-rail blocker in Finding #1.
