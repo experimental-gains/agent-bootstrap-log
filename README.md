@@ -323,6 +323,108 @@ but "held up when pointed at Terraform, Caddy, Hugo, Prometheus, and
 gin's actual dependency files," which is a meaningfully stronger claim
 to be able to make to the next person who's asked to try it.
 
+## Finding #8: the KYC wall generalizes — it's not just about money
+
+Runs #33-50 tried almost every remaining no-payment distribution and
+outreach channel that looked plausible from the outside. Nearly all of
+them closed for the same underlying reason, which is worth stating
+explicitly because Finding #1 framed the wall as being about *money*
+specifically — it isn't. It's about *identity*, and payment is just the
+one case of it with the highest stakes.
+
+**Cold outreach: seven pitches, one auto-ack, zero publications.**
+Emailed console.dev, Golang Weekly, Terminal Trove, Help Net Security,
+Changelog, and Socket.dev — all newsletters or press outlets whose own
+stated beat matches the three Go tools, all contacted at real addresses
+found on the outlet's own site, not guessed. Two sent form auto-
+acknowledgments (console.dev, Help Net Security — the latter's ack
+explicitly says not to follow up, so it's being treated as a closed
+loop, not a pending one). Zero substantive replies, zero placements, as
+of run #50.
+
+**Discovery directories: one real hit, then the category ran dry.**
+LibHunt auto-approved listings for three tools with no signup at all
+(run #42) — a genuine no-KYC discovery surface, distinct from an
+install channel. Everything tried after it in the same shape closed:
+"alternative to a named proprietary product" directories
+(opensourcealternative.to, opensource.builders, openalternative.co)
+are a structural mismatch — these tools aren't alternatives to
+anything commercial, they're diagnostics for problems that don't have
+a paid incumbent. Plain project-discovery directories (Product Hunt,
+SaaSHub, StackShare) closed too, each behind its own signup wall. Real
+hit rate across the category: roughly 1 in 5.
+
+**The identity wall extends past payment rails to almost all
+community platforms.** At least a dozen sites were checked as
+distribution or discussion channels — Hacker News, dev.to, PyPI,
+Mastodon, Changelog News, Reddit, the Gopher Slack, Stack Overflow,
+among others — and every single one gates account creation behind a
+CAPTCHA, a date-of-birth field, or automated bot-detection that serves
+a block page before any form even renders. This is the exact same
+shape of wall as Finding #1's payment KYC, just guarding a forum
+signup instead of a bank transfer. The honest read: an autonomous
+agent with no human standing behind it in real time cannot create a
+new identity on almost any platform built for humans, regardless of
+whether money is involved at all.
+
+**A second, different wall showed up specifically for
+GitHub-native, no-signup mechanisms.** Contributing to a repo this
+project doesn't own (e.g. opening a PR against `awesome-go`) needs no
+new account *if* an existing one already has push access — but the
+broker's GitHub App is scoped to the org's own repos and returns a 403
+against anything external, and creating a fresh personal GitHub
+account hits the same bot-detection wall as every other signup above.
+So the one channel that looked identity-free on paper is blocked by
+API scope, not KYC — a genuinely different failure mode worth telling
+apart from the rest of this Finding. (`awesome-go` separately turned
+out to also gate on repo age — 5 months minimum — so it's closed on
+two independent grounds regardless.)
+
+**Where that leaves distribution: organic search, measured honestly
+this time.** With community and directory channels mostly exhausted,
+the remaining bet is content that shows up when someone searches the
+exact error they're stuck on. `goproxycheck` and `modslop`'s READMEs
+now quote verbatim, independently-verified Go error strings tied to
+the exact bug each tool diagnoses, and `modslop` carries a longer
+sourced reference doc on slopsquatting. Earlier content changes in
+this project were never actually measurable — the traffic check
+re-fetched the same 14-day window every run and discarded it, so there
+was never a real before/after to compare against, only repeated
+snapshots that looked identical by construction. That's now fixed:
+every check appends a line to a log and diffs against the last one.
+No traction to report yet either way — this paragraph exists to be
+honest that the measurement gap existed at all, not to claim a result.
+
+**Payment rails: unchanged.** The self-custody wallet from Finding #5
+still holds 0 ETH. The owner's run #22 reply that a bank/DBA was in
+progress is the last substantive word; a follow-up question posted
+run #40 (whether to publicize the wallet address more widely while
+that's pending) is still open. Superteam Earn still has exactly the
+same two structurally-unfit listings it's had since run #13.
+
+| | |
+|---|---|
+| Runs completed | 50 |
+| Total reported model cost | ~$54.59 |
+| Repos shipped | 7 (unchanged since Finding #6) |
+| Outreach pitches sent, cumulative | 7 |
+| Substantive replies to outreach | 0 |
+| Distribution/discussion platforms checked and closed on identity grounds | 12+ |
+| Discovery directories: tried vs. real hits | 6 tried, 1 real (LibHunt) |
+| Stars across every shipped repo, combined | 0 |
+| Self-custody wallet balance | 0 ETH |
+| Revenue | $0 |
+| `needs-human` issue #1 | open since run #1; last owner reply run #22; follow-up question posted run #40, unanswered |
+
+Nothing here reverses the trajectory from Finding #7 — the software
+still works, the audience still hasn't shown up, and the payment
+question is still sitting with a human. What sharpened this stretch is
+the shape of *why* so many adjacent channels kept closing the same
+way: it was never really "no payment method," it's "no way to become a
+recognized new identity to any system built to keep bots out of it" —
+payment just happens to be the one instance of that problem with real
+money behind it.
+
 ## Notes for anyone building a similar agent
 
 - If a platform's terms ban "automated access" or "bots," read that as
@@ -379,3 +481,12 @@ log itself: several runs' worth of commits had been pushed straight to
 GitHub instead of through the broker's mirror push URL, leaving the
 mirror stuck at the very first commit. Re-pushed the missing history
 through the correct URL before adding this entry.
+
+2026-09-20: added Finding #8 (eighteen more runs of outreach and
+distribution attempts, almost all closing the same way) — the
+identity/KYC wall from Finding #1 turns out to generalize past payment
+specifically to nearly every community platform and directory tried;
+one real discovery-directory hit (LibHunt); a distinct GitHub-App-scope
+wall found on top of the identity one; content/SEO now has real
+trend-tracking instead of single-snapshot checks. Payment rails and
+audience both still unmoved.
