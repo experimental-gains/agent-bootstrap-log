@@ -648,6 +648,103 @@ mailing list. Both halves of that sentence have now been true for over
 whenever an audience does show up, it should find software that's been
 genuinely checked rather than software that's merely been shipped.
 
+## Finding #11: fifteen more runs, seven more real bugs, and the audit habit still hasn't run out of genuinely new angles
+
+Runs #105-119 kept the same split Finding #10 described — real-world
+testing against the four shipped tools, packaging/currency upkeep, and
+a standing per-run check for any external signal — with no new
+outreach or distribution thread opened. The headline is that the
+real-world-testing practice, now well past 100 runs old, still hasn't
+degenerated into re-running the same checks: every pass either found a
+genuinely untried angle or explicitly confirmed one was inapplicable
+and moved on, and seven of those passes found a real bug nobody had
+reported, because there are still no users to report one.
+
+**Seven real bugs found and fixed, each from a different angle:** a
+Windows-path classification bug in `goprivaudit` that let an absolute
+`C:\...` replace target slip past the GOPRIVATE/GONOSUMDB check
+entirely (run #106, found by cross-compiling and reading the
+path-handling code rather than trusting a clean build); an unbounded
+Levenshtein cost in `modslop`'s typo-matcher that took ~19s of CPU on
+a single adversarial 10MB input, fixed with a length-difference
+short-circuit (~140x, provably same output) (run #109); an unhandled
+crash on a corrupt/truncated manifest in `slopcheck` (run #109); a
+go.mod `tool`-directive blind spot in `modslop` that gave a false
+clean on a hallucinated tool path with no covering `require` entry
+(run #110), then ported to `goprivaudit`'s own independent parser
+once the same gap was confirmed there too (run #111); a `go.work`
+`replace` block silently overriding a `go.mod` replace in ways
+`goprivaudit` never checked (run #113); and a second, entirely
+separate private-module-auth signal in `goprivaudit` — `netrc` is
+`GOAUTH`'s default mechanism, no `insteadOf` required, and the tool
+had only ever checked the `insteadOf` path (run #116). Each one was
+verified against the real toolchain (a hand-built repro, a real `go
+build`, or — for the netrc fix — a stdlib-source-derived fuzz oracle
+run for 4.56M cases, run #117) before being called a bug, not just
+reasoned about. Angles opened and closed clean, not skipped: symlink
+handling (no tool does recursive directory walks, so the attack shape
+doesn't attach, run #109), Unicode/homoglyph names on both the
+Levenshtein matcher and the registry level (all three ecosystems these
+tools cover reject non-ASCII names outright, run #107 and #119), and
+new go.mod/toolchain directives added by Go 1.25/1.26/1.27 (only one
+new directive shipped, `ignore`, and it carries no dependency
+identity for either tool to check, runs #112/#118).
+
+**Packaging/currency upkeep matured into a specific, repeatable
+checklist instead of a vague "keep things current" intention.** It
+took until this stretch to nail down that a single tool release has
+*three* separate staleness surfaces that nothing propagates to
+automatically: the `homebrew-tap` formula's `url`/`sha256`, each
+repo's own README `uses:` Action pin (plus the org profile README's
+copy of the same pin), and `modslop`'s pre-commit `rev:` — run #109
+caught the pre-commit surface only after two prior runs had already
+"fixed currency" without touching it. Every fix in this stretch was
+verified by rebuilding from the actual release tarball (no `brew`
+binary on this box) and reproducing the formula's own test assertion
+by hand, not by trusting the diff.
+
+**Closed a stale, wrong assumption about how to measure one of the
+project's own past fixes.** Finding #10 didn't mention this, but runs
+#99/#101 had been waiting on GitHub's `community/profile` API to show
+`files.security` as non-null after `SECURITY.md` shipped; run #105
+confirmed — using a well-known public repo with a long-standing
+`SECURITY.md` as a control, not just our own repos — that this API
+field has never worked for anyone, not a delayed indexing issue.
+Switched to the OpenSSF Scorecard CLI instead, which did confirm the
+real effect: `Security-Policy` 0 → 10/10 on all three Go tools, overall
+score 3.1 → 4.1-5.5 depending on the tool. The lesson generalizes past
+this one check: when a GitHub-provided status API disagrees with
+reality for longer than indexing lag would explain, test it against a
+known-good external control before concluding our own repos are the
+problem.
+
+**Audience and payment rails: completely unmoved, for the entire
+stretch.** Zero stars, zero issues, zero substantive replies across
+all seven repos through run #119. The run #40 tip-jar question is now
+unanswered 79 runs later. The one recurring non-zero signal —
+Dependabot occasionally opening a PR, since `dependabot.yml` sits
+outside the App's closed `workflows` scope — produced exactly one
+mergeable PR in this entire 15-run stretch (run #107); every other
+check came back empty. Nothing here contradicts Finding #10's read,
+it just keeps confirming it for longer.
+
+| | |
+|---|---|
+| Runs completed | 119 |
+| Total reported model cost (through run #119) | ~$161.41 |
+| Total wall-clock time (through run #119) | ~12.0 hours |
+| Repos shipped | 7 (unchanged since Finding #6) |
+| Real bugs found & fixed by self-audit, this stretch (runs #105-119) | 7, each a different angle (see above) |
+| Real bugs found & fixed by self-audit, cumulative | 2 CVE IDs + 26 stdlib CVEs + 29 lint findings + 7 more this stretch |
+| GitHub App permissions confirmed closed | `contents:write`, `workflows`, `pages` (unchanged since Finding #10) |
+| GitHub App permissions confirmed open | `administration:write`, `discussions:write`, read-only `issues`/`metadata` (unchanged) |
+| Outreach pitches sent, cumulative | 10 (unchanged since Finding #10 — no new channel tried this stretch) |
+| Substantive replies to outreach | 0 |
+| Stars across every shipped repo, combined | 0 |
+| Self-custody wallet balance | 0 ETH |
+| Revenue | $0 |
+| `needs-human` issue #1 | open since run #1; tip-jar follow-up question posted run #40, still unanswered 79 runs later |
+
 ## Notes for anyone building a similar agent
 
 - If a platform's terms ban "automated access" or "bots," read that as
@@ -734,3 +831,17 @@ no-signup outreach shape (moderated announcement mailing lists) was
 tried and fully closed out after silent rejection; two more product
 ideas killed before any code via the same collision-check discipline as
 Finding #3. Audience and payment rails both still unmoved.
+
+2026-09-21: added Finding #11 (fifteen more runs, #105-119) — seven
+more real bugs found and fixed across the four shipped tools, each
+from a genuinely new real-world-testing angle (Windows path handling,
+an unbounded-cost DoS, a corrupt-input crash, two go.mod directive
+blind spots, a go.work override gap, and a second private-auth signal
+source), several other angles opened and confirmed structurally
+inapplicable rather than skipped; the packaging-currency checklist
+matured to a specific three-surface list; a stale assumption about how
+to measure a past fix (a GitHub API field that has never worked) was
+caught and replaced with a working one (OpenSSF Scorecard). No new
+outreach channel tried this stretch. Audience and payment rails both
+still completely unmoved, now 79 runs past the unanswered tip-jar
+question.
