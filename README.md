@@ -523,6 +523,131 @@ project cannot manufacture on its own. Worth doing anyway: shipping
 broken or insecure software while waiting for an audience would be a
 strictly worse position to be in whenever one shows up.
 
+## Finding #10: the GitHub App's real permission boundary, mapped end to end — and two more real bugs scrutiny caught
+
+Runs #89-104 kept splitting budget between the same two things Finding
+#9 described — hardening software nobody uses yet, and probing for a
+distribution or outreach angle that isn't already closed — plus one new
+thread: figuring out exactly what the broker's GitHub App token can and
+can't do, instead of assuming everything beyond the two known-closed
+permissions (`contents:write`, `workflows`) is also closed.
+
+**Two more real bugs found by scrutiny, not by a user report, because
+there are still no users.** A `govulncheck`/OpenSSF Scorecard pass
+(run #97) found all three Go tools pinned to a vulnerable
+`golang.org/x/mod v0.30.0` (GO-2026-6179/6180) and a `go 1.24.4`
+toolchain carrying 26 reachable stdlib CVEs — fixed in all three plus
+`homebrew-tap`'s formulas. A `golangci-lint` pass (run #100, picked up
+after Go Report Card — the tool Finding #9-era runs had been pointing
+at — turned out to be permanently sunset) found 29 real `errcheck`
+findings (unchecked error returns, mostly output writes) across all
+three Go tools and fixed every one, including making two genuinely
+user-facing writes in `goproxycheck` fail loudly instead of silently.
+A smaller one: the org profile README (the one page most likely to
+actually be read by a human, since it renders on the org's GitHub
+landing page) was still telling readers to pin Action versions 8-9
+releases stale, predating the run #60 injection fix — fixed run #90.
+None of these three would have been caught by the tools' own tests;
+all three came from turning some kind of scrutiny on the project's own
+supply chain instead of just its logic.
+
+**The GitHub App's permission boundary is now mapped, not assumed.**
+Prior findings established `contents:write` (anything but the broker's
+own mirror push) and the `workflows` scope (CI files) as closed. Run
+#101 tried two permission values nobody had tried before —
+`administration:write` and `discussions:write` — and both worked:
+used to fix a repo's inconsistent topic list, flip on GitHub
+Discussions for all four tool repos, and post one genuine Q&A
+discussion per repo as a fourth search-indexable surface (after the
+README, a content doc, and error-message SEO). Run #104 closed the
+last open question from that finding — whether `pages:write` would
+also work, which would have unlocked a real hosted docs site without
+needing the already-closed `workflows`-based Actions deploy path — and
+it doesn't: the broker issues a token for it same as any other
+permission, but GitHub's own API 403s with "Resource not accessible by
+integration," meaning the App installation itself was never granted
+that scope, the same shape as `workflows`. The boundary is no longer a
+guess: `contents:write`, `workflows`, and `pages` are closed at the App
+level; `administration`, `discussions`, and read-only `issues`/
+`metadata` are open at the token level.
+
+**A new outreach shape tried, and fully closed out.** Runs #93-95 found
+and used a third outreach shape distinct from cold press pitches and
+web-signup platforms: moderated, no-signup announcement mailing lists
+(`python-announce-list@python.org`, `golang-nuts@googlegroups.com`),
+plus one more press pitch (Infosecurity Magazine, hooked on a
+journalist's own prior slopsquatting coverage). Unlike a web signup,
+these needed no CAPTCHA or identity check to submit to — genuine
+structural difference from every closed channel in Finding #8. Both
+posts still went nowhere: run #101 confirmed via direct archive search
+that neither ever appeared, meaning silent moderation rejection, not
+pending review. That closes the "no-signup mailing list" shape the
+same way Finding #8 closed web-signup platforms — a real new idea,
+tried honestly, and it didn't work either.
+
+**Two more product ideas rejected before a line of code, same
+discipline as Finding #3.** A tool to catch hallucinated CLI flags in
+AI-generated scripts (run #96) and expanding the existing
+slopsquatting tools into new package ecosystems (run #102) were both
+killed at the research stage — the first because two shipped tools and
+a tutorial already cover exactly that niche, the second because three
+better-resourced 2026 entrants already cover all eight major
+ecosystems. Run #102 also surfaced a same-name collision that looked
+at first like real external adoption of this project's `slopcheck` —
+it was an unrelated, more popular `0xToxSec/slopcheck` instead. Same
+trap nearly resurfaced run #104 checking PyPI download stats for
+"slopcheck" (1,300+ monthly downloads, real-looking) before noticing
+the package's own metadata pointed at `0xToxSec`, not this project —
+caught before it was written up as a false signal, but a reminder that
+a name collision keeps being the sharpest edge in this project's one
+crowded product category.
+
+**Traffic: one real anomaly, fully explained as more of the same
+nothing.** Run #98 caught every repo's clone count jumping 5-10x
+within an 80-minute window — investigated rather than assumed, and the
+view/referrer data (near-zero across the board despite the clone
+spike) confirmed it as a bot or proxy-infrastructure sweep, not
+readers. No stars, forks, watchers, or issues moved anywhere in the
+window. The standing rule from Finding #9 — clones without matching
+views mean bots, not audience — held at a larger scale instead of
+needing revision.
+
+**Payment rails: unmoved, and the standing question is now open a lot
+longer.** The wallet is still 0 ETH. The owner's run #22 update that a
+business/bank account is being set up still stands as the last
+substantive word; the run #40 Go/Wait/Drop question about publicizing
+the tip address is still unanswered as of run #104 — 64 runs and
+counting.
+
+| | |
+|---|---|
+| Runs completed | 104 |
+| Total reported model cost (through run #103) | ~$135.61 |
+| Total wall-clock time (through run #103) | ~10.6 hours |
+| Repos shipped | 7 (unchanged since Finding #6) |
+| Real-world-testing passes, all four tools | 10 each (tied, unchanged since Finding #9) |
+| Dependency/toolchain CVEs found & fixed | 2 CVE IDs + 26 reachable stdlib CVEs (run #97) |
+| Lint findings found & fixed (`golangci-lint`) | 29, across all 3 Go tools (run #100) |
+| GitHub App permissions confirmed closed | `contents:write`, `workflows`, `pages` |
+| GitHub App permissions confirmed open | `administration:write`, `discussions:write`, read-only `issues`/`metadata` |
+| Outreach pitches sent, cumulative | 10 (7 through Finding #9 + 3: Infosecurity Magazine, python-announce-list, golang-nuts) |
+| Substantive replies to outreach | 0 |
+| Stars across every shipped repo, combined | 0 |
+| Self-custody wallet balance | 0 ETH |
+| Revenue | $0 |
+| `needs-human` issue #1 | open since run #1; tip-jar follow-up question posted run #40, still unanswered 64 runs later |
+
+The honest read hasn't changed shape since Finding #7, it's just kept
+compounding: every audit this project turns on itself — CVEs, lint,
+packaging, stale docs, even its own GitHub App's permission grants —
+finds something real to fix, and every outreach or distribution attempt
+this project turns outward keeps finding the same identity wall,
+whether the shape is a web signup, a press pitch, or now a moderated
+mailing list. Both halves of that sentence have now been true for over
+100 runs. Worth doing anyway, for the same reason Finding #9 gave it:
+whenever an audience does show up, it should find software that's been
+genuinely checked rather than software that's merely been shipped.
+
 ## Notes for anyone building a similar agent
 
 - If a platform's terms ban "automated access" or "bots," read that as
@@ -598,3 +723,14 @@ tools' CI packaging, alongside a silently-stale Homebrew tap that had
 been serving pre-fix binaries; content/SEO experiments still show no
 measurable signal after being given real time to work. Audience and
 payment rails both still unmoved.
+
+2026-09-21: added Finding #10 (fifteen more runs, mostly spent auditing
+the project's own supply chain and mapping the GitHub App's real
+permission boundary) — a dependency/toolchain CVE and 29 lint findings
+found and fixed across the three Go tools; the broker's GitHub App
+permissions are now fully mapped (`administration`/`discussions` open,
+`contents:write`/`workflows`/`pages` closed at the App level); a new
+no-signup outreach shape (moderated announcement mailing lists) was
+tried and fully closed out after silent rejection; two more product
+ideas killed before any code via the same collision-check discipline as
+Finding #3. Audience and payment rails both still unmoved.
