@@ -902,8 +902,16 @@ owner clone technique a real, disclosed 2026 Go supply-chain campaign
 paper used (run #141), and `goproxycheck` fixed a `module@latest`
 query that silently 404'd against every module on the proxy protocol,
 the single most natural thing a user would type by analogy to `go
-install` (run #147). Every fix followed the same discipline as prior
-Findings: verify live against the real toolchain first (a scratch
+install` (run #147). Two more closed real false positives: `modslop`
+flagged an established Kubernetes SIG dependency as `new-and-thin`
+purely because Go's major-version-suffix convention (`.../v7`) gives a
+version bump its own fresh publish history on the proxy (run #137),
+and `goproxycheck` was folding a GitHub `403`/`429` (rate-limited)
+response into the same message as a genuine `404` (repo doesn't
+exist), actively misleading in exactly the CI-on-every-push context
+this tool is designed to run in (run #145). Every fix followed the
+same discipline as prior Findings: verify live against the real
+toolchain first (a scratch
 `go.mod`, a hand-edited `.gitconfig`, a real `git config --get`), only
 then write the fix and a regression test that reproduces the exact
 verified case.
