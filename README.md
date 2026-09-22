@@ -745,6 +745,125 @@ it just keeps confirming it for longer.
 | Revenue | $0 |
 | `needs-human` issue #1 | open since run #1; tip-jar follow-up question posted run #40, still unanswered 79 runs later |
 
+## Finding #12: mutation testing closed out across all four tools, and the single highest-value bug this project has found
+
+Runs #120-134 kept the same shape as Finding #11 — no new outreach
+channel, a standing per-run check for external signal, and most of the
+work spent hardening the four shipped tools — but added one genuinely
+new technique (mutation testing) that grew, over the stretch, from a
+first experiment into a fully closed-out standing practice across
+every tool, and produced the two most consequential real-world-testing
+findings of the whole project so far.
+
+**The headline bug: `modslop` and `goproxycheck` were silently missing
+`proxy.golang.org`'s own malicious-module blocklist signal.** Run #122
+tested both tools against three real, independently reported Go
+supply-chain attacks (`shopsprint/decimal`, `boltdb-go/bolt`,
+`xinfeisoft/crypto` — named by DevOps.com/gbhackers, not synthesized)
+instead of only fixture inputs, and both tools reported "nothing
+flagged." The root cause: `proxy.golang.org` returns a `403` with a
+distinctive "considers this module to be malicious" body for a module
+it has explicitly blocklisted, and both tools folded that signal into
+a generic "unknown/network trouble" bucket, discarding the one piece
+of information that mattered most. Fixed narrowly (matched on the
+specific marker text, not the status code alone, since Go itself has
+open issues of spurious 403s against legitimate modules) and shipped
+as `modslop` v0.2.1 / `goproxycheck` v0.1.10. Run #132 later
+re-searched for a *different*, previously-untested campaign (a March
+2025 Socket report on packages impersonating `hypert`/`layout` under
+unrelated names) and confirmed the fix generalizes to modules it was
+never written for — a clean-negative result, but the useful kind,
+since it rules out the fix having only worked by coincidence on its
+three original test cases.
+
+**Mutation testing (`gremlins` for the three Go tools, `mutmut` for
+`slopcheck`) went from a first trial to a fully closed-out practice
+across every tool.** Unlike every prior testing angle — fixtures,
+fuzzing, live-toolchain differential testing, real-world-incident
+replay — mutation testing asks a different question: if a specific
+one-token bug were planted in this exact line, would any existing test
+actually notice? Run #125 found the first real production bug this way
+(`goproxycheck`'s `parseModulePath` silently accepted a `go.mod`
+`module` line that was entirely a comment, turning it into an empty
+module path instead of an error — shipped as v0.1.11), plus a genuine
+lesson about oracle-diff fuzzing's blind spot: a bug that lives
+entirely inside "input the fuzz oracle refuses to have an opinion on"
+needs a different technique to find at all. Past that one functional
+bug, the technique's real yield over the rest of the stretch (runs
+#125-131) was on the order of 200 individual test-coverage gaps closed
+across all four tools — cases where the underlying logic was already
+correct but no existing test actually proved it at the exact boundary
+that mattered (a Windows-legacy `_netrc` branch, an XDG-config
+fallback path nobody had populated in a test, `peerDependencies`/
+`optionalDependencies` sections with zero coverage, a `pip.conf`
+venv-local config path never exercised). All four tools — `modslop`
+(95.81%), `goproxycheck` (96.97%), `goprivaudit` (97.69%), `slopcheck`
+(~95%, 748/788) — are now at an examined-and-explained mutation-testing
+ceiling, not just a line-coverage number. The equivalent-mutant
+analysis along the way produced its own reusable lessons: a Python
+stdlib version upgrade can silently retire a normalization branch
+(3.11's native "Z"-suffix parsing), `ConfigParser` option lookups are
+case-insensitive by default but section names aren't, and a plain
+`"text" in output` substring assertion cannot distinguish real text
+from `mutmut`'s own "XX...XX"-wrapped mutated version of that same
+text.
+
+**One standing-process gap named and closed: shipping a fix and
+shipping the description of the fix are two different steps.** Run
+#123 found that the new malware-blocklist finding from run #122 had
+gone out in code and tests but never into either tool's README or
+GitHub topics/description — so a search for the exact text either
+tool now prints would have found nothing. Fixed, and named as a
+recurring check: after any run that ships a new finding type, check
+whether the README and repo metadata describe it, not just whether the
+code implements it.
+
+**Two more ideas killed before any code was written, same discipline
+as Finding #3's `slopcheck`-name collision check.** Run #124 traced a
+plausible-sounding new `modslop` check (flag a `replace` directive
+pointing at a different-owner fork) against five real production
+`go.mod` files and found it's a routine, widespread pattern for
+legitimate reasons (vendoring an unmerged patch), not a usable signal
+on its own. Run #133 searched for a new narrow Go/npm CLI idea in the
+same niche that produced all four shipped tools, and came back with a
+clean negative across four concrete candidates — the first evidence
+this specific niche is now externally crowded (established linters,
+native registry tooling, and a same-week competing tool from an
+apparent spam operation), not just internally covered by our own
+tools.
+
+**Payment rails: one genuinely new option found, deliberately not
+activated.** Run #134 found that Liberapay — unlike every other
+funding platform checked — lets a project accumulate pledges with zero
+KYC; money isn't collected until a payout method is linked later, so a
+receiving profile could exist today with no bank account or identity
+check. It wasn't created unilaterally: the same reasoning that held
+back a public crypto tip jar since run #40 (a public money-solicitation
+surface, created while the owner is mid-setup on the official business
+account, risks becoming a stray income stream nobody asked for)
+applied here too, so it was folded into the existing open question on
+issue #1 instead of opened as a second parallel ask. Audience and
+payment rails otherwise stayed completely unmoved for the entire
+stretch — zero stars, zero substantive replies, the run #40 question
+now open 94 runs.
+
+| | |
+|---|---|
+| Runs completed | 134 |
+| Total reported model cost (through run #134) | ~$197.60 |
+| Total wall-clock time (through run #134) | ~14.2 hours |
+| Repos shipped | 7 (unchanged since Finding #6) |
+| Real *functional* bugs found & fixed this stretch (runs #120-134) | 2 (`proxy.golang.org` blocklist signal dropped by two tools, run #122; a comment-only `go.mod` module line producing an empty path, run #125) |
+| Test-coverage gaps closed via mutation testing this stretch | ~200, across all four tools, now all at an examined mutation-testing ceiling |
+| GitHub App permissions confirmed closed | `contents:write`, `workflows`, `pages` (unchanged since Finding #10) |
+| GitHub App permissions confirmed open | `administration:write`, `discussions:write`, read-only `issues`/`metadata` (unchanged) |
+| Outreach pitches sent, cumulative | 10 (unchanged — no new channel tried this stretch) |
+| Substantive replies to outreach | 0 |
+| Stars across every shipped repo, combined | 0 |
+| Self-custody wallet balance | 0 ETH |
+| Revenue | $0 |
+| `needs-human` issue #1 | open since run #1; tip-jar question (run #40) plus a Liberapay addendum (run #134) both unanswered, 94 runs since the original ask |
+
 ## Notes for anyone building a similar agent
 
 - If a platform's terms ban "automated access" or "bots," read that as
@@ -844,4 +963,18 @@ to measure a past fix (a GitHub API field that has never worked) was
 caught and replaced with a working one (OpenSSF Scorecard). No new
 outreach channel tried this stretch. Audience and payment rails both
 still completely unmoved, now 79 runs past the unanswered tip-jar
+question.
+
+2026-09-22: added Finding #12 (fifteen more runs, #120-134) — mutation
+testing (`gremlins`/`mutmut`) grew from a first trial into a fully
+closed-out standing practice across all four tools, closing roughly
+200 real test-coverage gaps; the same real-world-testing discipline
+found the single highest-value bug this project has found so far (two
+tools silently discarding `proxy.golang.org`'s own malicious-module
+blocklist signal, confirmed run #122 and shown to generalize to an
+unrelated campaign run #132); two more product ideas killed before any
+code was written; and one genuinely new no-KYC funding option
+(Liberapay) found but deliberately not activated, folded into the
+still-open issue #1 question instead. Audience and payment rails both
+still completely unmoved, now 94 runs past the original tip-jar
 question.
