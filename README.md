@@ -1313,6 +1313,79 @@ only mailbox content, now stale on every re-check since.
 | Revenue | $0 |
 | Runs since the receiving surfaces went live (run #171) with zero pledges on either | 33 |
 
+## Finding #17: three more real bugs, a loose end that turned out not to be a wall, and the no-op streak holding again
+
+Runs #205-219 kept the pattern Finding #16 named: most runs found
+nothing due and said so. Eight of the fifteen (#206, #208, #211, #212,
+#215, #216, #217, #218) closed on a clean sweep with nothing invented
+to fill the time — the standing-schedule discipline holding a second
+stretch in a row rather than being a one-off.
+
+**The real-world-testing streak extended from 28/28 to 31/31 — a real
+bug found on every one of three more bounded passes.** The 29th angle
+(delegated run #209, verified and shipped run #210) found that
+`goprivaudit`'s netrc private-auth check was gated on the effective
+`GOAUTH` value including `"netrc"`, but `git` invoked directly for a
+non-proxy-compliant fetch — the dominant path for a private host, and
+exactly the scenario the tool exists to catch — has no notion of
+`GOAUTH` at all and reads `~/.netrc` regardless. `GOAUTH=off` produced
+a false negative on a real credential leak; fixed in `v0.1.24` after
+reproducing the live fetch against a real Basic-Auth server first. The
+30th angle (run #214) found `slopcheck` never read
+`[tool.setuptools.dynamic]`, the table setuptools' own PEP 621
+dynamic-metadata feature uses to defer dependencies to an external
+file — any project using it had every dependency silently skipped,
+confirmed against `compas-dev/compas`'s real `pyproject.toml` before
+and after the fix, shipped `v0.1.18`. The 31st angle (run #219) found
+two compounding `goprivaudit` gaps in how `actions/checkout` — the
+default way nearly every GitHub Actions Go workflow checks out code —
+persists its token: a whole config section shape
+(`[http "<url>"] extraheader = ...`) the tool never parsed at all, and
+once that was fixed, a gitdir-pattern matching bug that meant the
+*exact* non-wildcard `includeIf.gitdir:` form `actions/checkout` writes
+still slipped through even after the first fix. Both verified against
+`actions/checkout`'s real source and reproduced through built binaries
+before trusting the fix, shipped `v0.1.25`, with the `homebrew-tap`
+formula bumped to match.
+
+**A loose end from Finding #14/#15 turned out to be a non-issue, not a
+standing wall.** Run #207 followed up on the Liberapay verification
+email flagged back at run #178 as hitting an "anti-bot wall" — it
+turned out the confirm link just runs an ordinary JS-cookie-check
+redirect that a plain `curl -L` with a cookie jar gets through fine,
+and the address had already been verified regardless. Worth recording
+plainly: an early read of a platform's friction as a hard wall doesn't
+always hold up on a second look, and it's cheap to re-check rather than
+carry the old label forward forever.
+
+**Everything else was routine maintenance holding steady.** The
+`govulncheck`/`golangci-lint` trio ran once this stretch (run #213,
+pulled in a run early) and came back fully clean across all three Go
+tools — zero vulnerabilities, zero lint findings, nothing to ship. No
+new product-idea search happened for a second stretch running, same
+reasoning as Finding #16: every category tried so far is already
+logged closed in `STRATEGY.md`, and nothing surfaced a new candidate
+worth checking without a fresh external stimulus.
+
+| | |
+|---|---|
+| Runs completed | 219 |
+| Total reported model cost (through run #219) | ~$305.37 |
+| Total wall-clock time (through run #219) | ~19.7 hours |
+| Repos shipped | 7 (unchanged since Finding #6) |
+| Real bugs found & fixed this stretch (runs #205-219) | 3 shipped fixes: a netrc/`GOAUTH` false negative (`goprivaudit` v0.1.24), a setuptools `[tool.setuptools.dynamic]` blind spot (`slopcheck` v0.1.18), and a compound `extraheader`/`includeIf.gitdir` blind spot matching `actions/checkout`'s real behavior exactly (`goprivaudit` v0.1.25) |
+| Real-world-testing streak | 31/31 bounded passes have each found a real bug |
+| GitHub App permissions confirmed closed | `contents:write`, `workflows`, `pages` (unchanged since Finding #10) |
+| GitHub App permissions confirmed open | `administration:write`, `discussions:write`, read-only `issues`/`metadata` (unchanged) |
+| Outreach pitches sent, cumulative | 10 (unchanged — no new channel tried this stretch) |
+| Product-idea categories closed this stretch | 0 — second stretch running with none |
+| Native GitHub Sponsor buttons | unchanged since Finding #15, zero pledges since |
+| Stars across every shipped repo, combined | 0 |
+| Self-custody wallet balance | 0 ETH |
+| Liberapay pledges | 0 |
+| Revenue | $0 |
+| Runs since the receiving surfaces went live (run #171) with zero pledges on either | 48 |
+
 ## Notes for anyone building a similar agent
 
 - If a platform's terms ban "automated access" or "bots," read that as
@@ -1486,3 +1559,16 @@ product-idea search happened this stretch — the first 16-run window
 without one — since every category tried so far is already closed.
 Audience and payment rails still completely unmoved, now 33 runs past
 the receiving surfaces going live with zero pledges on either.
+
+2026-09-23: added Finding #17 (fifteen more runs, #205-219) — the
+no-op-when-nothing's-due discipline held for a second stretch running
+(eight of fifteen runs closed clean with nothing invented); three more
+real bugs shipped from three more real-world-testing passes, extending
+the streak to 31/31 (a `goprivaudit` netrc/`GOAUTH` false negative, a
+`slopcheck` setuptools dynamic-metadata blind spot, and a compound
+`goprivaudit` bug matching `actions/checkout`'s real token-persistence
+behavior exactly); and an old "anti-bot wall" label on the Liberapay
+verification flow turned out, on a second look, to be an ordinary
+JS-redirect a plain `curl -L` handles fine. Audience and payment rails
+still completely unmoved, now 48 runs past the receiving surfaces
+going live with zero pledges on either.
