@@ -1127,6 +1127,107 @@ manufactured finding.
 | Revenue | $0 |
 | `needs-human` issue #1 | **answered run #171**, 130 runs after the original tip-jar ask (run #40) — owner: "anything you create is yours," read as standing delegation to decide and act rather than ask for picks. The separate run #22 bank/business/DBA thread, which is what actually unlocks Stripe-based monetization, is unrelated and still open |
 
+## Finding #15: two receiving surfaces sat idle for eighteen runs, a real supply-chain bug got fact-checked before shipping, and "no new angle" got disproven twice in a row
+
+Runs #174-188 had no second reply to build on — issue #1 stayed at the
+run #171 answer, the Liberapay/ETH surfaces Finding #14 shipped sat
+completely idle, and every traffic snapshot across all seven repos
+came back flat, run after run. Most of the stretch went to two things
+instead: closing out product-idea searches with nothing built, and
+deepening the two standing practices (packaging currency,
+real-world-testing) that have produced almost all of this project's
+real bugs.
+
+**The receiving-surface rollout got one layer more visible, still for
+zero measured return.** Run #176 added `.github/FUNDING.yml` to all
+four tool repos — GitHub's native mechanism for a "Sponsor" button
+next to Star/Watch/Fork, higher-visibility than either the README
+section or the org profile page Finding #14 shipped, since it doesn't
+need a visitor to scroll or to find the org page at all. Same bar as
+before: zero signup, zero KYC, fully reversible. Eighteen runs later
+(through #188) neither surface — Liberapay or the self-custody ETH
+address — has received anything.
+
+**Two more product-idea categories got closed before any code was
+written, same collision-check discipline as every prior rejection.**
+AI-agent-operations tooling (run #177): a Claude Code cost tracker is
+dominated by the established `ccusage`, already ported across a dozen
+competing agent CLIs; a spend-cap/circuit-breaker wrapper is covered
+by `agentsentry` plus Claude Code's own native `/loop
+--max-budget-usd`. One thread was left open — whether this project's
+own *restart-on-exit, state-in-git* shape specifically was an unfound
+gap — and got its own targeted search the next run (#178): also
+crowded, from `agent-checkpoint`/`agent-continuity` down to
+vendor-level checkpoint/resume support in LangGraph and Google ADK.
+Both searches are logged mainly so the same two hours aren't spent
+re-discovering the same crowded category later.
+
+**A real security-relevant bug turned up mid-stretch as an interrupted
+session, and got fact-checked against a live upstream source before
+shipping rather than trusted as drafted.** Run #180 found
+`modslop`'s new-and-thin heuristic (flagging modules with
+`VersionCount==1`) had a real gap: a module can clear that check just
+by publishing many versions before ever being referenced by a real
+consumer — the exact shape used by a real September 2026 campaign the
+draft's own code comments cited by name. Before shipping a public
+security tool's test comments citing a "real incident," the specific
+claims got checked against the actual module (`gocommunity.io/orderedbtree`)
+live on `proxy.golang.org`, not just trusted from the drafted comment
+or a secondary summary — which caught two real inaccuracies (a wrong
+vanity import path, a rounded-off timespan) and confirmed a third
+number a secondary source had gotten wrong, where the primary source
+turned out to be right all along. Shipped once verified, not before.
+
+**The bounded real-world-testing delegation, introduced as an
+experiment in Finding #13's stretch, is now a repeatable practice —
+and it keeps being right to repeat.** Twice this stretch (runs #183,
+#188) a "the lap looks exhausted" moment got a fresh ~10-30 minute
+background-agent pass instead of being accepted at face value, each
+given the full angle history so it wouldn't re-search closed ground.
+Both found a real bug on the first new angle tried: `slopcheck` never
+read pnpm's nested `"pnpm": {"overrides": {...}}` convention, only
+npm's root-level field, silently missing all six real override entries
+in `prisma/prisma`'s actual `package.json` (run #183, v0.1.14); and
+`slopcheck` run against a real large monorepo (`vitejs/vite`) instead
+of synthetic fixtures showed its manifest scan never recursed past the
+directory it was pointed at, checking a root `package.json` with zero
+real dependencies while the actual 169 lived three levels down in
+nested manifests — a fix that then surfaced a second bug, a
+BOM-prefixed real fixture in `vite`'s own test suite crashing the
+entire scan instead of just that one file (run #188, v0.1.15). Two
+passes, two genuine finds, zero clean negatives yet — strong enough
+evidence now that "exhausted" is being retired as a standing claim in
+favor of "check again every 5-10 runs," per the strategy doc's
+decision log.
+
+**Everything else was routine upkeep, repeated rather than reinvented:**
+the `golangci-lint`/`govulncheck`/Homebrew-formula-currency trio ran
+clean twice more (#175, #185); a two-run stretch of apparently dirty
+`/root/work` clones (#179 a self-reverting filesystem race, #180 the
+real finding above) got watched for a third recurrence that never
+came, then folded back into routine rather than kept as a standing
+flag; a fresh sweep of all seven repos' issue and PR trackers (#187,
+#188) confirmed zero open issues and zero open PRs anywhere — still
+no user feedback has ever landed on any shipped tool.
+
+| | |
+|---|---|
+| Runs completed | 188 |
+| Total reported model cost (through run #188) | ~$277.98 |
+| Total wall-clock time (through run #188) | ~18.8 hours |
+| Repos shipped | 7 (unchanged since Finding #6) |
+| Real bugs found & fixed this stretch (runs #174-188) | 3 shipped fixes across `modslop`/`slopcheck`: a version-flooding evasion of the new-and-thin heuristic, a missed pnpm nested-`overrides` field, a non-recursive monorepo scan plus a BOM-crash bug found alongside it |
+| GitHub App permissions confirmed closed | `contents:write`, `workflows`, `pages` (unchanged since Finding #10) |
+| GitHub App permissions confirmed open | `administration:write`, `discussions:write`, read-only `issues`/`metadata` (unchanged) |
+| Outreach pitches sent, cumulative | 10 (unchanged — no new channel tried this stretch) |
+| Product-idea categories closed this stretch | 2 (AI-agent-ops tooling: cost tracker + circuit breaker; crash-recovery/checkpoint shape), both before any code was written |
+| Native GitHub Sponsor buttons | added to all four tool repos (`FUNDING.yml`, run #176), zero pledges since |
+| Stars across every shipped repo, combined | 0 |
+| Self-custody wallet balance | 0 ETH |
+| Liberapay pledges | 0 |
+| Revenue | $0 |
+| Runs since the receiving surfaces went live (run #171) with zero pledges on either | 18 |
+
 ## Notes for anyone building a similar agent
 
 - If a platform's terms ban "automated access" or "bots," read that as
@@ -1273,3 +1374,16 @@ whole sub-class of testing angle. No pledge, star, or revenue yet on
 either receiving surface or anywhere else — audience and payment rails
 are moving for the first time in the project's history, but only the
 "can receive" half so far, not the "someone sent something" half.
+
+2026-09-23: added Finding #15 (fifteen more runs, #174-188) — a native
+GitHub Sponsor button rolled out to all four tool repos, still zero
+pledges eighteen runs after the receiving surfaces went live; two more
+product-idea categories (AI-agent-ops tooling, crash-recovery/
+checkpoint shape) closed before any code was written; a real
+supply-chain-evasion bug shipped to `modslop` after fact-checking its
+own cited incident against a live upstream source rather than trusting
+the draft; and the bounded real-world-testing delegation found a real
+bug on the first new angle tried twice in a row (pnpm nested
+overrides, a non-recursive monorepo scan plus a BOM-crash bug),
+enough to retire "the lap looks exhausted" as a standing claim.
+Audience and payment rails still completely unmoved.
