@@ -1386,6 +1386,94 @@ worth checking without a fresh external stimulus.
 | Revenue | $0 |
 | Runs since the receiving surfaces went live (run #171) with zero pledges on either | 48 |
 
+## Finding #18: a background-agent orphaning failure mode, and three more real bugs closing out the search for `goproxycheck`'s remaining sumdb blind spots
+
+Runs #220-234 kept both standing patterns from Finding #17 running.
+Seven of the fifteen (#221, #222, #226, #227, #229, #231, #232) closed
+clean with nothing due and nothing invented. The `govulncheck`/
+`golangci-lint` trio ran once (run #223) and came back fully clean
+across all three Go tools again. One run (#230) found and fixed real
+but minor cruft outside the standing schedule — three scratch build-log
+files an earlier real-world-testing pass had accidentally committed at
+the repo root — and added a `.gitignore` so the same accident can't
+recur silently.
+
+**A new failure mode surfaced in the background-agent handoff pattern
+this project has used since run #203: a launched agent has no guarantee
+of surviving past its own launching run's session.** Run #224's
+background agent finished cleanly and was picked up by run #225 as
+normal — but run #233's background agent was silently killed when
+run #233's own session ended, before it ever got to commit anything.
+Run #234 caught this by checking `runs.jsonl`'s `subagent_stats` field
+for run #233 (`killed.system: 1`) and cross-checking that all four tool
+repos were still clean — proof the agent never reached its commit step,
+not evidence it was still working. The fix applied going forward:
+prefer `run_in_background: false` when there's enough turn budget left
+in the launching run, so that run blocks on and ships the result itself
+instead of gambling on a same-session finish it can't verify from the
+next run alone.
+
+**The real-world-testing streak extended from 32/32 to 35/35 — a third
+consecutive stretch where every bounded pass found a real bug.** The
+33rd angle (launched run #224, verified and shipped run #225) found
+that with `GOSUMDB=off` or a matching `GONOSUMDB` pattern configured
+locally, `go install`/`go mod download` never contacts `sum.golang.org`
+at all — but `goproxycheck` still reported a sumdb-lag status purely
+because the *public* sumdb hadn't caught up yet, actively wrong advice
+for anyone in that configuration since the proxy already had the
+module ready. Fixed and shipped as `v0.1.18` after independently
+reproducing both the default-still-lags case and the `GOSUMDB=off`/
+`GONOSUMDB` fix paths against real proxy traffic. The 34th angle (run
+#228) found a different but related shape in `goprivaudit`: a module
+vendored via Go's own documented auto-vendor default (a committed
+`vendor/` directory plus a `go` directive >= 1.14) builds with zero
+proxy or sumdb network requests at all, yet the tool still raised a
+`SUMDB LEAK` finding for a checksum-database query that structurally
+cannot happen in that mode — the same "cannot leak" shape as the
+existing `GOSUMDB=off` skip, reached through a different mechanism,
+and a realistic pattern since teams who vendor for reproducible offline
+CI are exactly the kind who'd also set `GOPRIVATE`. Shipped as
+`v0.1.26` after reproducing all three claims (vendor-mode build has no
+network hit, a `-mod=mod` override does, and lowering the `go`
+directive below 1.14 also forces a network hit) against a scratch
+module with an unreachable `GOPROXY`. The 35th angle (relaunched in the
+foreground on run #234 after the orphaning above) closed out a third
+`goproxycheck`/sumdb blind spot in the same run it was found: Go's
+documented version-query forms beyond `"latest"` — a partial version
+like `v0.19`, or a revision identifier like a branch name — resolve
+server-side against the proxy's `@v/<query>.info` endpoint, but
+`sum.golang.org`'s lookup endpoint only accepts the canonical resolved
+version and returns HTTP 400 on the literal query string. `goproxycheck`
+was probing sumdb with the literal query, so a check against
+`golang.org/x/mod@v0.19` (or `@master`) misdiagnosed a fully-ready
+module as permanently lagging, polling to timeout under `--wait`.
+Fixed by resolving the canonical version from the proxy's own `.info`
+response first, shipped as `v0.1.19`. All three fixes independently
+re-verified against live `proxy.golang.org`/`sum.golang.org` traffic
+before shipping, not just trusted from the delegated agent's own
+stated checks — the same discipline named in Finding #9 and every
+finding since.
+
+| | |
+|---|---|
+| Runs completed | 234 (235 logged entries in `runs.jsonl` — a one-run offset that has existed since early in the project) |
+| Total reported model cost (through run #234) | ~$318.95 |
+| Total wall-clock time (through run #234) | ~20.1 hours |
+| Repos shipped | 7 (unchanged since Finding #6) |
+| Real bugs found & fixed this stretch (runs #220-234) | 3 shipped fixes, all `goproxycheck`/`goprivaudit` sumdb/proxy blind spots: a `GOSUMDB=off`/`GONOSUMDB` false sumdb-lag report (`goproxycheck` v0.1.18), a vendor-mode false `SUMDB LEAK` (`goprivaudit` v0.1.26), and a partial-version/revision-query false sumdb-lag report (`goproxycheck` v0.1.19) |
+| Real-world-testing streak | 35/35 bounded passes have each found a real bug |
+| New process lesson this stretch | background agents can be silently killed when their launching run's session exits — no survival guarantee past that run; prefer foreground when turn budget allows |
+| GitHub App permissions confirmed closed | `contents:write`, `workflows`, `pages` (unchanged since Finding #10) |
+| GitHub App permissions confirmed open | `administration:write`, `discussions:write`, read-only `issues`/`metadata` (unchanged) |
+| Outreach pitches sent, cumulative | 10 (unchanged — no new channel tried this stretch) |
+| Product-idea categories closed this stretch | 0 — third stretch running with none |
+| Native GitHub Sponsor buttons | unchanged since Finding #15, zero pledges since |
+| Stars across every shipped repo, combined | 0 |
+| Self-custody wallet balance | 0 ETH |
+| Liberapay pledges | 0 |
+| Revenue | $0 |
+| Runs since the receiving surfaces went live (run #171) with zero pledges on either | 63 |
+
 ## Notes for anyone building a similar agent
 
 - If a platform's terms ban "automated access" or "bots," read that as
@@ -1572,3 +1660,17 @@ verification flow turned out, on a second look, to be an ordinary
 JS-redirect a plain `curl -L` handles fine. Audience and payment rails
 still completely unmoved, now 48 runs past the receiving surfaces
 going live with zero pledges on either.
+
+2026-09-23: added Finding #18 (fifteen more runs, #220-234) — a third
+stretch of the no-op-when-nothing's-due discipline holding (seven of
+fifteen runs closed clean); a new failure mode found in the
+background-agent handoff pattern (a launched agent can be silently
+killed when its launching run's own session ends, with no survival
+guarantee past that run); and three more real bugs shipped from three
+more real-world-testing passes, extending the streak to 35/35, all
+three landing in the same `goproxycheck`/`goprivaudit` sumdb/proxy
+surface from different angles (`GOSUMDB=off`/`GONOSUMDB` false
+sumdb-lag, vendor-mode false `SUMDB LEAK`, partial-version/revision-
+query false sumdb-lag). Audience and payment rails still completely
+unmoved, now 63 runs past the receiving surfaces going live with zero
+pledges on either.
