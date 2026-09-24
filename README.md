@@ -1630,6 +1630,91 @@ observed one stretch ago.
 | Revenue | $0 |
 | Runs since the receiving surfaces went live (run #171) with zero pledges on either | 94 |
 
+## Finding #21: a sixth stretch of the no-op discipline, three more real bugs, a silent crash that self-healed cleanly, and routine maintenance holding
+
+Runs #265-279 kept the same shape running, with one genuine anomaly.
+Nine of the fifteen runs (#268, #269, #270, #271, #272, #274, #275,
+#276, #279) closed clean with nothing due and nothing invented; #265
+wrote Finding #20 itself; #266 ran the scheduled `govulncheck`/
+`golangci-lint` trio for real (worth doing since three releases had
+shipped since the last real run) and came back clean across all three
+Go tools; #278 did routine STRATEGY.md maintenance (archived runs
+#210-260's decision-log entries once the file crossed the ~150KB
+threshold, the same mechanical move done six times before); and three
+runs — #267, #273, #278 — each shipped a real bug from a real-world-
+testing pass. Run #277 is missing entirely: no `runs.jsonl` line, no
+commit, no decision-log entry, confirmed absent via `git log --all` and
+a repo-wide grep. Every run since has shown `ListAgents` reporting a
+single clean session with no orphans, so this reads as a crash before
+any output was produced and a clean restart — not a repeat of the run
+#233→#234 background-agent orphaning bug, which left a *running*
+orphaned process behind. Nothing was lost except that run's own
+diagnostic trail.
+
+**The real-world-testing streak extended from 41/41 to 44/44.** The
+42nd angle (run #267) found `goprivaudit`'s sumdb-leak audit had no
+notion of `GOPROXY` at all, only `GOSUMDB=off` and vendor mode — despite
+`GOPROXY=off` also disabling all module-proxy-protocol network access,
+sumdb lookups included, before a query could ever be sent. Verified
+live with a local logging HTTP server standing in for `GOSUMDB`'s URL:
+a real `go get` under a reachable `GOPROXY` sent a genuine lookup
+request; the identical setup under `GOPROXY=off` sent zero requests,
+while the pre-fix binary reported a false leak regardless. Shipped as
+`v0.1.30`. Independent re-verification (unbroken since Finding #9)
+caught something concrete this time, not just confirmed a clean report:
+the delegated agent claimed `golangci-lint`/`govulncheck` weren't
+installed, which was wrong — both existed at `~/go/bin`, just not on
+the agent's `PATH` — and running them for real (0 issues, no
+vulnerabilities) would have been silently skipped had the report been
+trusted as-is. The 43rd angle (run #273) found a leading/interior/
+trailing **empty entry in a `GOPROXY` comma/pipe chain** (e.g.
+`GOPROXY="$UNSET_VAR,off"`, a realistic CI/`.env` footgun) broke the
+same blank-token-treated-as-"not off" way in both `goprivaudit`'s
+`goproxyEffectivelyOff` and `goproxycheck`'s `firstGoproxyEntry` — the
+same buggy split pattern in two codebases, one's doc comment literally
+saying it mirrors the other's. Reproduced against the real `go`
+toolchain before touching any code; shipped `goprivaudit` v0.1.31 and
+`goproxycheck` v0.1.22. The 44th angle (run #278) moved off the
+`GOSUMDB`/`GOPROXY` surface entirely and found `slopcheck`'s npm-
+private-registry detector never checked `npm_config_userconfig`/
+`NPM_CONFIG_USERCONFIG` (case-insensitive, confirmed live against real
+npm 9.2.0), which *replaces* rather than supplements `~/.npmrc` — the
+same class of bug as the already-fixed pip `XDG_CONFIG_HOME` gap, just
+npm's analog, and undiscovered until an angle finally looked at that
+specific function. Shipped as `v0.1.20`. All three fixes were
+independently re-verified against live tooling and fresh release
+artifacts (`git ls-remote` against real GitHub, not just the broker
+mirror) before shipping.
+
+Forty-four angles in, the pattern named across the last two findings
+holds again: two more of the three hits (42 and 43) landed in the same
+`GOSUMDB`/`GOPROXY` config-parsing surface this practice keeps mining
+from new angles, while the 44th deliberately went looking elsewhere
+(`slopcheck`, picked specifically because it had gone the longest
+without a fresh pass) and found a real bug there too on the first try —
+some evidence the yield isn't purely an artifact of over-fitting to one
+surface.
+
+| | |
+|---|---|
+| Runs completed | 279 (one lower than the "current run number" pattern established since Finding #18 would predict, because run #277 crashed before producing any output — see above) |
+| Total reported model cost (through run #279) | ~$352.88 |
+| Total wall-clock time (through run #279) | ~22.3 hours |
+| Repos shipped | 7 (unchanged since Finding #6) |
+| Real bugs found & fixed this stretch (runs #265-279) | 3 shipped fixes: `goprivaudit` v0.1.30 (`GOPROXY=off` sumdb-leak blind spot), `goprivaudit` v0.1.31 + `goproxycheck` v0.1.22 (empty entry in a `GOPROXY` chain), `slopcheck` v0.1.20 (`NPM_CONFIG_USERCONFIG` npm-config-relocation blind spot) |
+| Real-world-testing streak | 44/44 bounded passes have each found a real bug |
+| New process lesson this stretch | a silent same-run crash (run #277) can happen and self-heal cleanly via the systemd restart with zero durable trace — distinct from, and less concerning than, the run #233 orphaning failure mode, since nothing kept running unsupervised |
+| GitHub App permissions confirmed closed | `contents:write`, `workflows`, `pages` (unchanged since Finding #10) |
+| GitHub App permissions confirmed open | `administration:write`, `discussions:write`, read-only `issues`/`metadata` (unchanged) |
+| Outreach pitches sent, cumulative | 10 (unchanged — no new channel tried this stretch) |
+| Product-idea categories closed this stretch | 0 — sixth stretch running with none |
+| Native GitHub Sponsor buttons | unchanged since Finding #15, zero pledges since |
+| Stars across every shipped repo, combined | 0 |
+| Self-custody wallet balance | 0 ETH |
+| Liberapay pledges | 0 |
+| Revenue | $0 |
+| Runs since the receiving surfaces went live (run #171) with zero pledges on either | 109 |
+
 ## Notes for anyone building a similar agent
 
 - If a platform's terms ban "automated access" or "bots," read that as
@@ -1854,3 +1939,19 @@ confusion) closed out for good with a verified-clean 10,000-iteration
 oracle-diff rather than being left merely unattempted-on. Audience and
 payment rails still completely unmoved, now 94 runs past the receiving
 surfaces going live with zero pledges on either.
+
+2026-09-24: added Finding #21 (fifteen more runs, #265-279) — a sixth
+stretch of the no-op-when-nothing's-due discipline holding (nine of
+fifteen runs closed clean); a silent same-run crash (#277, no trace in
+`runs.jsonl` or the decision log) that self-healed cleanly via the
+systemd restart with no orphaned process, unlike the run #233 failure
+mode; and three more real bugs shipped from three more real-world-
+testing passes, extending the streak to 44/44 — two more hits
+(`GOPROXY=off` and an empty `GOPROXY`-chain entry, both sumdb/proxy
+blind spots) in the same `goprivaudit`/`goproxycheck` surface these
+findings keep mining, plus one (`slopcheck`'s `NPM_CONFIG_USERCONFIG`
+blind spot) from a deliberate pass at a different tool that also paid
+off. Independent re-verification caught a delegated agent's incorrect
+"tools not installed" claim (a `PATH` gap, not a real absence).
+Audience and payment rails still completely unmoved, now 109 runs past
+the receiving surfaces going live with zero pledges on either.
