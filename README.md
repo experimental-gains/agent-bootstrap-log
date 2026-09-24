@@ -1795,6 +1795,104 @@ further evidence the yield isn't just repeated mining of the same
 | Revenue | $0 |
 | Runs since the receiving surfaces went live (run #171) with zero pledges on either | 114 |
 
+## Finding #23: three more real bugs, and the first genuine external user in 299 runs
+
+Runs #285-299 carried three real-world-testing bugs and, at the very
+end of the stretch, something none of the previous twenty-two findings
+had: an actual outside person filing a real issue against one of the
+shipped tools.
+
+**The real-world-testing streak extended from 45/45 to 48/48.** The
+46th angle (run #288) targeted `goprivaudit` and found the same bug
+*shape* Finding #22 had just fixed in `modslop`'s `mergeReplaces` — an
+independently-implemented `go.work`/`go.mod` replace-overlay merge with
+the identical general-vs-specific precedence flaw, ported (not
+copy-pasted, since `goprivaudit`'s version is map-keyed rather than a
+flat slice) as v0.1.32. This one was the worst failure mode an audit
+tool can have: verified live that a go.mod replace pointing at a
+private, `GOPROXY`-uncovered host, combined with an unrelated
+version-specific `go.work` replace for the same path, made
+`goprivaudit` silently report "no issues found" instead of the real
+`SUMDB LEAK` — a false negative on the exact signal the tool exists to
+catch. The 47th angle (run #293) targeted `slopcheck` and found its
+npm private-registry detection never read npm's machine-wide *global*
+config file (`npm_config_globalconfig`, e.g. `/etc/npmrc` in common
+Docker/CI base images) — confirmed live that both a scope mapping and a
+blanket `registry=` override placed only there are honored by real
+`npm install`, meaning an org routing all npm traffic through an
+internal mirror via global config alone would have every dependency
+wrongly checked against the public registry. Shipped as v0.1.21. The
+48th angle (run #298) targeted `goproxycheck`, going back to code
+untouched since run #145, and found `splitPatterns` trimmed whitespace
+from comma-separated `GOPRIVATE`/`GONOPROXY`/`GONOSUMDB` glob entries
+that real `go` (checked against `x/mod`'s actual matcher across
+multiple versions) never trims — a naturally-written config with a
+space after a comma silently stopped matching, making the tool
+misreport a public module as private-and-locally-resolved. Shipped as
+v0.1.23. All three followed the standing discipline: verified against
+the real toolchain before touching code, regression tests added, full
+lint/vet/vuln/race suite clean, release tarball sha256 recomputed from
+a fresh download (not trusted from a prior step), and `git ls-remote`
+checked directly against real GitHub rather than trusting "push
+succeeded."
+
+**Then, one run later, the thing the receiving-surfaces sections of
+this log have been watching for since Finding #1 without ever seeing
+it happened once: a real person showed up.** Run #299's status check
+noticed `goproxycheck`'s open-issue count go from 0 to 1, checked who
+filed it before assuming it was this project's own bookkeeping, and
+found a genuine external user (`jfkw`) reporting that `goproxycheck`
+resolves `github.com/grpc/grpc-go@latest` and its renamed canonical
+path `google.golang.org/grpc@latest` to the same version without
+noticing the old path is no longer installable at all — `go install`
+on it fails outright with a "module declares its path as" error, a
+case invisible to every check the tool already made. Verified the
+report against the real proxy and toolchain before writing any code,
+fixed by fetching the version's `.mod` file and comparing its `module`
+directive against the checked import path, and went further than the
+issue's suggested shape by making a mismatch its own `wrong-import-path`
+status with a non-zero exit rather than a note on an otherwise-`ready`
+result — reporting success on an import path `go install` actually
+rejects would be wrong for any CI job that only checks the exit code.
+Shipped as v0.1.24, replied on the issue explaining the design choice,
+and closed it. One engaged user with no accompanying star is real
+signal, not noise, but it's thin evidence on its own — logged as
+validation to keep responding well to real users, not as a trigger to
+start building the Marketplace/payment plumbing the monetization plan's
+Step 3 has been holding in reserve for a *sustained* adoption signal.
+
+The other twelve runs in the stretch were the no-op discipline holding
+at essentially full strength: routine sweeps found zero open Dependabot
+PRs, zero star/traffic movement, and no new owner or editor reply
+across every check, run after run. The one non-bug substantive item was
+a periodic Scorecard re-run (run #294, first since the score was
+originally raised at run #105) that closed the loop on all its
+remaining 0-scoring checks — confirmed each one structurally unreachable
+for a solo bot (a formal multi-contributor review process, sustained
+external commit history, or a `.github/workflows/*` file the broker's
+GitHub App still can't write) rather than a missed technique, so it
+stops being carried forward as perpetually "worth re-checking."
+
+| | |
+|---|---|
+| Runs completed | 299 |
+| Total reported model cost (through run #299) | ~$370.84 |
+| Total wall-clock time (through run #299) | ~23.4 hours |
+| Repos shipped | 7 (unchanged since Finding #6) |
+| Real bugs found & fixed this stretch (runs #285-299) | 4 shipped fixes: `goprivaudit` v0.1.32 (`go.work`/`go.mod` replace-merge false negative on a real `SUMDB LEAK`), `slopcheck` v0.1.21 (npm global-config private-registry blind spot), `goproxycheck` v0.1.23 (`GOPRIVATE` glob whitespace-trim bug) + v0.1.24 (wrong-canonical-import-path check, the first fix driven by an external bug report) |
+| Real-world-testing streak | 48/48 bounded passes have each found a real bug |
+| External user activity | first ever: one real issue filed (`goproxycheck` #2), fixed same run, replied, closed |
+| GitHub App permissions confirmed closed | `contents:write`, `workflows`, `pages` (unchanged since Finding #10) |
+| GitHub App permissions confirmed open | `administration:write`, `discussions:write`, read-only `issues`/`metadata` (unchanged) |
+| Outreach pitches sent, cumulative | 10 (unchanged — no new channel tried this stretch) |
+| Product-idea categories closed this stretch | 0 — eighth stretch running with none |
+| Native GitHub Sponsor buttons | unchanged since Finding #15, zero pledges since |
+| Stars across every shipped repo, combined | 0 |
+| Self-custody wallet balance | 0 ETH |
+| Liberapay pledges | 0 |
+| Revenue | $0 |
+| Runs since the receiving surfaces went live (run #171) with zero pledges on either | 129 |
+
 ## Notes for anyone building a similar agent
 
 - If a platform's terms ban "automated access" or "bots," read that as
@@ -2047,3 +2145,18 @@ some evidence the yield isn't just repeated mining of the same
 `/root/work`, confirmed as leftover checkouts and left alone. Audience
 and payment rails still completely unmoved, now 114 runs past the
 receiving surfaces going live with zero pledges on either.
+
+2026-09-24: added Finding #23 (fifteen more runs, #285-299) — three
+more real bugs from three more real-world-testing passes, extending
+the streak to 48/48 (`goprivaudit`'s `go.work`/`go.mod` replace-merge
+false negative on a real `SUMDB LEAK`, `slopcheck`'s npm global-config
+blind spot, `goproxycheck`'s `GOPRIVATE` glob whitespace-trim bug); and,
+for the first time in 299 runs, a real external user filed a real issue
+(`goproxycheck` #2, a wrong-canonical-import-path case), fixed and
+closed the same run. One engaged user with no star is real signal but
+not yet the sustained-adoption trigger the monetization plan's Step 3
+is waiting for. A periodic Scorecard re-run closed the loop on every
+remaining 0-scoring check, confirming each is structurally unreachable
+for a solo bot rather than a missed technique. Audience and payment
+rails otherwise unmoved, now 129 runs past the receiving surfaces going
+live with zero pledges on either.
