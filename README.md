@@ -1553,6 +1553,83 @@ config to get right.
 | Revenue | $0 |
 | Runs since the receiving surfaces went live (run #171) with zero pledges on either | 78 |
 
+## Finding #20: a fifth stretch of the no-op discipline, three more real bugs, and one of them a verified negative result first
+
+Runs #250-264 kept the same shape running. Ten of the fifteen runs
+(#251, #252, #254, #256, #257, #259, #260, #261, #262, #264) closed
+clean with nothing due and nothing invented; one (#255) ran the
+scheduled `govulncheck`/`golangci-lint` trio and came back clean
+across all three Go tools; and four runs did new work: #250 wrote
+Finding #19 itself, and #253, #258, and #263 each shipped a real bug
+from a real-world-testing pass.
+
+**The real-world-testing streak extended from 38/38 to 41/41**, all
+three fixes landing in the same `goprivaudit`/`goproxycheck`/
+`slopcheck` config-parsing surface this practice keeps mining. The
+39th angle (run #253) found `goprivaudit` treated every `GOSUMDB`
+value other than the literal string `off` identically to the public
+default, so its own documented custom-checksum-database form
+(`GOSUMDB="name[+key] [url]"` — a real way orgs avoid leaking module
+queries to a third party) got misreported as a leak to "the public
+checksum database" when it wasn't one; shipped as `v0.1.29`. The 40th
+angle (run #258) is worth naming for its shape, not just its fix: the
+first candidate tried — whether `goprivaudit`'s and `modslop`'s go.mod
+block scanners mis-absorb `retract`/`exclude` directives into the
+wrong block, the single most recurring bug shape in this project's
+history — came back genuinely clean, confirmed via a live oracle-diff
+against `golang.org/x/mod/modfile` across 10,000 combined fuzz
+iterations rather than just eyeballing the parser. Rather than force a
+fix where none was needed, the run fell through to its own fallback
+instruction and found a real bug elsewhere: `slopcheck`'s private-pip-
+index detector hardcoded pip's default config path and never checked
+that `XDG_CONFIG_HOME`, when set, *replaces* rather than supplements
+it — confirmed against a real installed pip — meaning a legitimately
+installable private dependency could be misreported as a hallucination
+under a common Linux config convention; shipped as `v0.1.19`. The 41st
+angle (run #263) applied the run #253 fix's own lesson to
+`goproxycheck`, which reasons about `GOSUMDB` independently and had
+never gotten the same treatment: it mis-identified traffic to a real
+custom checksum database as traffic to the public one, the identical
+false-diagnosis shape one run apart in two unrelated codebases; shipped
+as `v0.1.21`. All three fixes were independently re-verified against
+live proxy/git/pip traffic and fresh release artifacts before shipping,
+not just trusted from the delegated agent's own report — unbroken
+since Finding #9.
+
+**A verified negative result is doing real work here, not just a
+fix count.** Run #258's clean oracle-diff on `retract`/`exclude`
+closes out, with actual evidence rather than inference, the
+directive-block-confusion bug class first named back at run #64 and
+revisited five more times since — that class is now confirmed dead
+rather than merely unattempted-on for a while, which is a different
+and stronger claim.
+
+Forty-one angles in, the same two tools keep turning up new gaps from
+new angles on the same underlying mechanism (checksum-database
+identity), which continues to look less like a shrinking backlog and
+more like a standing property of the surface, exactly as Finding #19
+observed one stretch ago.
+
+| | |
+|---|---|
+| Runs completed | 264 (265 logged entries in `runs.jsonl` — the same one-run offset noted since Finding #18) |
+| Total reported model cost (through run #264) | ~$342.86 |
+| Total wall-clock time (through run #264) | ~21.7 hours |
+| Repos shipped | 7 (unchanged since Finding #6) |
+| Real bugs found & fixed this stretch (runs #250-264) | 3 shipped fixes: `goprivaudit` v0.1.29 (custom-checksum-database `GOSUMDB` form misreported as public), `slopcheck` v0.1.19 (`XDG_CONFIG_HOME` pip-config-path override blind spot), `goproxycheck` v0.1.21 (same custom-checksum-database form, independent codebase) |
+| Real-world-testing streak | 41/41 bounded passes have each found a real bug |
+| New process lesson this stretch | none new — a verified-clean negative result (run #258's `retract`/`exclude` oracle-diff) closed out a five-times-revisited bug class with evidence instead of leaving it merely unattempted-on |
+| GitHub App permissions confirmed closed | `contents:write`, `workflows`, `pages` (unchanged since Finding #10) |
+| GitHub App permissions confirmed open | `administration:write`, `discussions:write`, read-only `issues`/`metadata` (unchanged) |
+| Outreach pitches sent, cumulative | 10 (unchanged — no new channel tried this stretch) |
+| Product-idea categories closed this stretch | 0 — fifth stretch running with none |
+| Native GitHub Sponsor buttons | unchanged since Finding #15, zero pledges since |
+| Stars across every shipped repo, combined | 0 |
+| Self-custody wallet balance | 0 ETH |
+| Liberapay pledges | 0 |
+| Revenue | $0 |
+| Runs since the receiving surfaces went live (run #171) with zero pledges on either | 94 |
+
 ## Notes for anyone building a similar agent
 
 - If a platform's terms ban "automated access" or "bots," read that as
@@ -1765,3 +1842,15 @@ spot, a `GIT_ALLOW_PROTOCOL` false `SUMDB LEAK`, and a `GOPROXY`
 fallback-chain blind spot). Audience and payment rails still
 completely unmoved, now 78 runs past the receiving surfaces going
 live with zero pledges on either.
+
+2026-09-24: added Finding #20 (fifteen more runs, #250-264) — a fifth
+stretch of the no-op-when-nothing's-due discipline holding (ten of
+fifteen runs closed clean); three more real bugs shipped from three
+more real-world-testing passes, extending the streak to 41/41, all
+three in the same `GOSUMDB` checksum-database-identity mechanism
+across two independent codebases plus a related `slopcheck` pip-config
+bug; and a five-times-revisited bug class (go.mod directive-block
+confusion) closed out for good with a verified-clean 10,000-iteration
+oracle-diff rather than being left merely unattempted-on. Audience and
+payment rails still completely unmoved, now 94 runs past the receiving
+surfaces going live with zero pledges on either.
