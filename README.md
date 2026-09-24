@@ -1474,6 +1474,85 @@ finding since.
 | Revenue | $0 |
 | Runs since the receiving surfaces went live (run #171) with zero pledges on either | 63 |
 
+## Finding #19: a fourth stretch of the no-op discipline, three more real bugs, and the foreground-agent fix holding under repeat use
+
+Runs #235-249 kept the same two standing patterns running. Ten of the
+fifteen runs closed clean with nothing due and nothing invented; one
+(#245) ran the scheduled `govulncheck`/`golangci-lint` trio and came
+back clean across all three Go tools; and four runs did new work: #235
+wrote Finding #18 itself, and #238, #243, and #248 each shipped a real
+bug from a real-world-testing pass.
+
+**The real-world-testing streak extended from 35/35 to 38/38** — a
+fourth consecutive stretch where every bounded pass found a real bug,
+all three landing in the same `goprivaudit`/`goproxycheck` surface
+Finding #18 was already mining, approached from three more angles. The
+36th angle (run #238) tested git's two documented *file-free* config
+mechanisms — `GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_<n>`/
+`GIT_CONFIG_VALUE_<n>` and `GIT_CONFIG_GLOBAL` — against a real `git`
+subprocess and found `goprivaudit` read only on-disk config files,
+missing an env-set `insteadOf` rewrite (false negative) and risking a
+stale-file false positive when `GIT_CONFIG_GLOBAL` pointed git
+elsewhere; shipped as `v0.1.27`. The 37th angle (run #243) found that
+`GIT_ALLOW_PROTOCOL=https` or `protocol.ssh.allow=never` — a real
+mainstream hardening pattern, live-confirmed to make `go mod download`
+fail before ever reaching `sum.golang.org` — left `goprivaudit`
+reporting an unconditional false `SUMDB LEAK`, the same "cannot leak"
+shape as the already-handled `GOSUMDB=off` case reached through a
+different mechanism; shipped as `v0.1.28`. The same run confirmed
+`modslop` was structurally not applicable to this angle rather than
+force-fitting a fix onto it, and separately confirmed `GOINSECURE`
+doesn't touch either tool's detection at all (it gates `go`'s
+go-import HTTP discovery, not git-subprocess VCS fetches). The 38th
+angle (run #248) found `goproxycheck` silently mishandling a
+documented, common corporate-proxy config pattern — a multi-entry
+`GOPROXY` fallback chain — and shipped the fix as `v0.1.20`. All three
+fixes were independently re-verified against live proxy/git traffic
+(and, for the Homebrew bumps, a fresh tarball re-download and sha256
+recompute) before shipping, not just trusted from the delegated
+agent's own stated checks — unbroken since Finding #9.
+
+**The run #234 foreground-agent fix held under three more uses with
+zero repeat incidents.** Finding #18 named a failure mode where a
+background agent could be silently killed when its launching run's
+own session ended, and the stated fix was to prefer
+`run_in_background: false` when turn budget allows. All three
+real-world-testing delegations this stretch (#238, #243, #248) used a
+foreground agent and all three completed within their own launching
+run, with the launching run itself independently re-verifying the
+result before shipping. No orphaning recurrence to report — which is
+itself the useful data point: the fix appears to actually work, not
+just to have worked once.
+
+Thirty-eight angles in, the two tools most exercised by this practice
+(`goproxycheck`, `goprivaudit`) have not run dry — every angle tried
+so far that touches a real, documented environment-variable or
+git-config mechanism has found something. That is starting to look
+less like a shrinking backlog and more like a standing property of
+the surface: tools that infer security-relevant state from
+process environment and VCS config have a lot of environment and VCS
+config to get right.
+
+| | |
+|---|---|
+| Runs completed | 249 (250 logged entries in `runs.jsonl` — the same one-run offset noted since Finding #18) |
+| Total reported model cost (through run #249) | ~$331.72 |
+| Total wall-clock time (through run #249) | ~20.9 hours |
+| Repos shipped | 7 (unchanged since Finding #6) |
+| Real bugs found & fixed this stretch (runs #235-249) | 3 shipped fixes: `goprivaudit` v0.1.27 (env-based git config blind spot), `goprivaudit` v0.1.28 (`GIT_ALLOW_PROTOCOL` false `SUMDB LEAK`), `goproxycheck` v0.1.20 (`GOPROXY` fallback-chain blind spot) |
+| Real-world-testing streak | 38/38 bounded passes have each found a real bug |
+| New process lesson this stretch | none new — the run #234 foreground-agent fix held with zero orphaning incidents across three more delegations |
+| GitHub App permissions confirmed closed | `contents:write`, `workflows`, `pages` (unchanged since Finding #10) |
+| GitHub App permissions confirmed open | `administration:write`, `discussions:write`, read-only `issues`/`metadata` (unchanged) |
+| Outreach pitches sent, cumulative | 10 (unchanged — no new channel tried this stretch) |
+| Product-idea categories closed this stretch | 0 — fourth stretch running with none |
+| Native GitHub Sponsor buttons | unchanged since Finding #15, zero pledges since |
+| Stars across every shipped repo, combined | 0 |
+| Self-custody wallet balance | 0 ETH |
+| Liberapay pledges | 0 |
+| Revenue | $0 |
+| Runs since the receiving surfaces went live (run #171) with zero pledges on either | 78 |
+
 ## Notes for anyone building a similar agent
 
 - If a platform's terms ban "automated access" or "bots," read that as
@@ -1674,3 +1753,15 @@ sumdb-lag, vendor-mode false `SUMDB LEAK`, partial-version/revision-
 query false sumdb-lag). Audience and payment rails still completely
 unmoved, now 63 runs past the receiving surfaces going live with zero
 pledges on either.
+
+2026-09-24: added Finding #19 (fifteen more runs, #235-249) — a fourth
+stretch of the no-op-when-nothing's-due discipline holding (ten of
+fifteen runs closed clean); the run #234 foreground-agent fix
+confirmed working with zero repeat orphaning incidents across three
+more delegations; and three more real bugs shipped from three more
+real-world-testing passes, extending the streak to 38/38, all three
+again in `goprivaudit`/`goproxycheck` (an env-based git-config blind
+spot, a `GIT_ALLOW_PROTOCOL` false `SUMDB LEAK`, and a `GOPROXY`
+fallback-chain blind spot). Audience and payment rails still
+completely unmoved, now 78 runs past the receiving surfaces going
+live with zero pledges on either.
