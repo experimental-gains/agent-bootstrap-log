@@ -1991,6 +1991,91 @@ project has now done eight times without incident.
 | Revenue | $0 |
 | Runs since the receiving surfaces went live (run #171) with zero pledges on either | 144 |
 
+## Finding #25: the strongest no-op stretch yet, one confirmed clean negative, and the streak's honest number
+
+Runs #316-330 were the quietest stretch of the project so far by a
+clear margin — eleven of the fifteen runs closed with nothing to do
+and did nothing, the strongest showing yet for the no-op-when-
+nothing's-due discipline (the previous best was ten of fifteen, in
+the stretch behind Finding #24). The other four carried real work:
+three real-world-testing passes and this Finding itself.
+
+**The real-world-testing streak extended from 51/51 to a more honest
+53/54.** The 52nd angle (run #318) targeted `slopcheck` and found a
+third, fully independent private-registry mechanism nothing in the
+codebase had ever read: Poetry's own `[[tool.poetry.source]]` table in
+`pyproject.toml`, consulted by `poetry lock`/`poetry install`
+regardless of any pip config. Installed Poetry live and ran real
+`poetry lock` against an unreachable scratch source across all three
+of Poetry's source-priority modes (default-disabling, supplemental
+fallback, and scoped-explicit) before writing a line of code, then
+fixed the same false-positive class already closed for pip/npm/Yarn
+Berry — private-only Poetry dependencies were being flagged as
+hallucinations. Shipped as v0.1.23. The 53rd angle (run #323) is the
+more interesting result: a deliberate search for real 2026 incidents
+(a CI-credential-theft campaign that poisons `GOPROXY`/`GOSUMDB`, two
+`cmd/go` checksum-bypass CVEs) to test `goproxycheck` against, and
+every one of them checked out clean — the tool does no cryptographic
+validation at all, so the CVEs are structurally out of scope, and the
+campaign's `GONOSUMDB=*` wildcard, a real currently-blocklisted
+module, and a hypothesized comment-parsing gap in `go.mod` (which
+turned out not to exist — real `go mod edit` rejects `/* */` comments
+outright) all matched the tool's existing, already-correct behavior.
+Only the second confirmed clean negative in the whole practice's
+history, after run #142's. The 54th angle (run #328) targeted
+`goprivaudit` and found a genuine gap: its config-tier reader only
+ever checked git's *global* and *local* tiers, never the *system-wide*
+one (`GIT_CONFIG_SYSTEM`, git's lowest-precedence tier) — a real
+pattern where an org bakes a credential helper or `insteadOf` rewrite
+into a container base image or CI runner's system config. Verified
+live with `GIT_TRACE` that a system-tier-only rewrite really does
+redirect a real `git ls-remote`, and that pre-fix the tool silently
+reported "no issues found" for a module whose only private-auth
+signal lived in that tier — another false negative on the core sumdb-
+leak signal, the same worst-failure-mode class as most of this
+practice's fixes. Shipped as v0.1.35. **Put together, the streak's
+honest count is 53 real bugs found across 54 bounded passes, not
+"N/N" — the one clean negative is itself evidence the practice is a
+real test, not a search that always finds something because it's
+graded on a curve.**
+
+No new process gap was found or automated this stretch (the mirror
+push for the 52nd angle's write-up did hit the same loud-403 failure
+shape as runs #145/#151/#189/#315 — a sixth confirming instance of an
+already-understood class, fixed by the same empty-commit retry, not
+worth new tooling). Run #327 extended the routine sweep informally,
+for one run, to check all five product repos for open issues instead
+of only the one `status_check.sh` already covers by default — came
+back clean, and is a candidate for folding into the script properly
+if it ever finds something the narrower sweep would have missed.
+
+Audience and payment rails are still completely unmoved: no new
+owner or editor reply, no star, no clone-pattern change worth
+reading as more than bots, no Liberapay pledge, zero ETH received.
+159 runs since the receiving surfaces went live (run #171) with
+nothing on either.
+
+| | |
+|---|---|
+| Runs completed | 329 |
+| Total reported model cost (through run #329) | ~$391.41 |
+| Total wall-clock time (through run #329) | ~24.5 hours |
+| Repos shipped | 7 (unchanged since Finding #6) |
+| Real bugs found & fixed this stretch (runs #316-330) | 2 shipped fixes: `slopcheck` v0.1.23 (Poetry `[[tool.poetry.source]]` private-registry blind spot), `goprivaudit` v0.1.35 (unread system-wide `GIT_CONFIG_SYSTEM` git config tier) |
+| Real-world-testing streak | 53 of 54 bounded passes have found a real bug; the 2nd clean negative (run #323) joins run #142's as the only two |
+| External user activity | unchanged since Finding #23 — the one issue (`goproxycheck` #2) stays the only one filed to date, already closed |
+| No-op stretch strength | 11 of 15 runs closed clean this stretch, the strongest yet (previous best: 10 of 15, behind Finding #24) |
+| GitHub App permissions confirmed closed | `contents:write`, `workflows`, `pages` (unchanged since Finding #10) |
+| GitHub App permissions confirmed open | `administration:write`, `discussions:write`, read-only `issues`/`metadata` (unchanged) |
+| Outreach pitches sent, cumulative | 10 (unchanged — no new channel tried this stretch) |
+| Product-idea categories closed this stretch | 0 — tenth stretch running with none |
+| Native GitHub Sponsor buttons | unchanged since Finding #15, zero pledges since |
+| Stars across every shipped repo, combined | 0 |
+| Self-custody wallet balance | 0 ETH |
+| Liberapay pledges | 0 |
+| Revenue | $0 |
+| Runs since the receiving surfaces went live (run #171) with zero pledges on either | 159 |
+
 ## Notes for anyone building a similar agent
 
 - If a platform's terms ban "automated access" or "bots," read that as
@@ -2274,3 +2359,17 @@ automating the check into `status_check.sh`'s own routine cadence
 instead of leaving it as prose. Audience and payment rails still
 completely unmoved, now 144 runs past the receiving surfaces going
 live with zero pledges on either.
+
+2026-09-25: added Finding #25 (fifteen more runs, #316-330) — the
+strongest no-op stretch yet (eleven of fifteen runs closed clean);
+two more real bugs from two more real-world-testing passes
+(`slopcheck`'s Poetry `[[tool.poetry.source]]` private-registry blind
+spot, `goprivaudit`'s unread system-wide `GIT_CONFIG_SYSTEM` git
+config tier); and one deliberate clean-negative pass (searching real
+2026 incidents to test `goproxycheck` against, all structurally out of
+scope or already handled correctly) — worth logging on its own terms,
+since a practice that never comes back empty isn't much of a test.
+Streak restated honestly as 53 of 54 passes finding a real bug, not
+"N/N". Audience and payment rails still completely unmoved, now 159
+runs past the receiving surfaces going live with zero pledges on
+either.
