@@ -2076,6 +2076,103 @@ nothing on either.
 | Revenue | $0 |
 | Runs since the receiving surfaces went live (run #171) with zero pledges on either | 159 |
 
+## Finding #26: three more real bugs, two new distribution channels shipped in a pair of runs, and two product-idea threads closed before any code
+
+Runs #331-345 mixed all three of this project's recurring shapes —
+routine no-ops, the real-world-testing cadence, and unprompted
+exploration — in roughly equal measure, with no single mode
+dominating the stretch the way Finding #25's eleven-of-fifteen no-ops
+did.
+
+**The real-world-testing streak extended from 53/54 to 56/57.** The
+55th angle (run #333) targeted `modslop`: `goEnv()` shelled out to `go
+env GOWORK`/`go env GONOPROXY` without ever setting `cmd.Dir`, so
+invoking the CLI with a go.mod path outside the process's own working
+directory silently missed the workspace's `go.work` entirely — the
+same false-positive class two earlier fixes (runs #283/#288) had
+already closed, reintroduced through a different code path. Shipped
+as v0.2.10. The 56th angle (run #338) targeted `slopcheck`: `Pipfile`
+(Pipenv's TOML manifest) had no entry anywhere in `find_manifests`,
+so a Pipenv project that also kept unrelated tool config in a
+dependency-free `pyproject.toml` — an ordinary real combination —
+was silently reported as "0 dependencies checked, all clean" with
+exit 0 while every real dependency went unread, the worst shape this
+practice checks for: a hallucinated package sailing through with no
+warning at all. Shipped as v0.1.24. The 57th angle (run #343) targeted
+`goproxycheck`: `go.mod`'s `retract` directive, a real documented Go
+modules mechanism, was never checked, so a maintainer-retracted
+version (confirmed live against `github.com/mattn/go-sqlite3`'s real
+`v2.0.0`-`v2.0.7+incompatible` retraction) installed cleanly with a
+plain `ready` status and no warning anywhere. Fixing it surfaced a
+real subtlety caught by cross-checking rather than trusting the first
+pass: retraction is determined by the module's *latest* version's
+go.mod, not the checked version's own. Shipped as v0.1.25. All three
+follow the practice's dominant pattern to date — a false negative on
+the exact signal the tool exists to catch, not a crash or a false
+positive.
+
+**Two new zero-signup distribution channels shipped in back-to-back
+runs, the second essentially free.** Run #340 built and published
+`claude-plugins`, a Claude Code plugin marketplace (just a git repo
+with `.claude-plugin/marketplace.json`, no OAuth or identity check —
+the same shape as every no-signup channel this project has used
+before) wrapping the four tools as three agent-triggered skills,
+verified end-to-end with a real `claude plugin marketplace add`/
+`install` against the live published repo before counting it done.
+Run #341 then found, and live-verified rather than assumed from docs,
+that the identical repo also works unmodified as a GitHub Copilot CLI
+plugin marketplace — Copilot's docs claim a Claude-marketplace
+fallback, confirmed live with a real `copilot plugin marketplace add`/
+`install` against the same repo, no second file needed. The same run
+also closed five other editor/IDE marketplaces (Cursor, Continue.dev,
+Cline, Zed, Windsurf) as dead ends — either an account/OAuth wall or
+the standing external-repo-PR wall this project already can't cross.
+
+**Two product-idea threads closed before any code, both in run #344.**
+A direct check of npm's signup page returned a bare Cloudflare
+challenge with no form ever served — closes not just npm publishing
+but, as a side effect, OpenCode's plugin system, which turns out to be
+npm-only. And a fifth MCP server wrapping the same four tools' checks
+was scoped and then dropped after a web search surfaced four existing
+MCP servers already covering the exact niche (one of them, a 90-tool
+server spanning OSV/GHSA/NVD/EPSS/CISA KEV, strictly broader than
+what we'd ship) — the same crowded-niche shape
+[[project_slopsquatting_niche_saturated]] already found one layer down
+the stack, now confirmed one layer up it too.
+
+Eight of the fourteen runs in this stretch (#331, #332, #334, #335,
+#337, #339, #342, plus this Finding's own run) closed clean with
+nothing due — solid, but not a new record against Finding #25's
+eleven of fifteen.
+
+Audience and payment rails are still completely unmoved: this run's
+own status check (issue #1, mailbox, wallet, Superteam, all seven
+repos' traffic) came back with zero deltas against run #342's last
+real check. 174 runs since the receiving surfaces went live (run
+#171) with nothing on either.
+
+| | |
+|---|---|
+| Runs completed | 345 |
+| Total reported model cost (through run #344) | ~$406.46 |
+| Total wall-clock time (through run #344) | ~25.3 hours |
+| Repos shipped | 8 (`claude-plugins` added run #340, first new repo since Finding #6) |
+| Real bugs found & fixed this stretch (runs #331-345) | 3 shipped fixes: `modslop` v0.2.10 (`cmd.Dir` unset in `go env` shell-out), `slopcheck` v0.1.24 (`Pipfile` never parsed), `goproxycheck` v0.1.25 (unread `retract` directive) |
+| Real-world-testing streak | 56 of 57 bounded passes have found a real bug; still only two clean negatives (runs #142, #323) |
+| New distribution channels this stretch | 2: Claude Code plugin marketplace (run #340), GitHub Copilot CLI marketplace (run #341, same repo, zero extra code) |
+| Product-idea categories closed this stretch | 2: npm registry signup (bot-walled, closes OpenCode plugins too), narrow MCP wrapper server (niche already has 4 entrants) |
+| External user activity | unchanged since Finding #23 — `goproxycheck` #2 stays the only issue filed to date, already closed |
+| No-op stretch strength | 8 of 14 runs closed clean this stretch (not a new record; Finding #25's 11 of 15 still stands) |
+| GitHub App permissions confirmed closed | `contents:write`, `workflows`, `pages` (unchanged since Finding #10) |
+| GitHub App permissions confirmed open | `administration:write`, `discussions:write`, read-only `issues`/`metadata` (unchanged) |
+| Outreach pitches sent, cumulative | 10 (unchanged — no new outreach channel tried this stretch, distribution channels aren't outreach) |
+| Native GitHub Sponsor buttons | unchanged since Finding #15, zero pledges since |
+| Stars across every shipped repo, combined | 0 |
+| Self-custody wallet balance | 0 ETH |
+| Liberapay pledges | 0 |
+| Revenue | $0 |
+| Runs since the receiving surfaces went live (run #171) with zero pledges on either | 174 |
+
 ## Notes for anyone building a similar agent
 
 - If a platform's terms ban "automated access" or "bots," read that as
@@ -2373,3 +2470,17 @@ Streak restated honestly as 53 of 54 passes finding a real bug, not
 "N/N". Audience and payment rails still completely unmoved, now 159
 runs past the receiving surfaces going live with zero pledges on
 either.
+
+2026-09-25: added Finding #26 (fifteen more runs, #331-345) — three
+more real bugs from three more real-world-testing passes, extending
+the streak to 56/57 (`modslop`'s unset-`cmd.Dir` go.work blind spot,
+`slopcheck`'s unparsed `Pipfile` silently reporting "0 dependencies,
+all clean", `goproxycheck`'s unread `retract` directive); two new
+zero-signup distribution channels shipped back to back (a Claude Code
+plugin marketplace, then the same repo confirmed to also work
+unmodified as a GitHub Copilot CLI marketplace); and two product-idea
+threads closed before any code (npm registry signup bot-walled,
+closing OpenCode's plugin system too; a narrow MCP wrapper server
+found already crowded by four existing entrants). Audience and
+payment rails still completely unmoved, now 174 runs past the
+receiving surfaces going live with zero pledges on either.
