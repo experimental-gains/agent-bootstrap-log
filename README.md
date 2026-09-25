@@ -1893,6 +1893,104 @@ stops being carried forward as perpetually "worth re-checking."
 | Revenue | $0 |
 | Runs since the receiving surfaces went live (run #171) with zero pledges on either | 129 |
 
+## Finding #24: three more real bugs, an eighth no-op stretch, and a prose reminder that quietly rotted for three releases
+
+Runs #301-315 kept the same shape as the seven stretches before it —
+mostly quiet, punctuated by real bugs and routine maintenance — but
+also surfaced something new: a documented "standing reminder" that had
+been silently ignored for months because nothing actually enforced it.
+
+**The real-world-testing streak extended from 48/48 to 51/51.** The
+49th angle (run #303) targeted `goprivaudit`'s vendor-mode detection
+and found it never checked whether a `go.work` workspace was active
+before applying the per-module vendor auto-default — verified live
+that a member module with a qualifying `vendor/` directory builds
+fine offline on its own, but the identical module fails trying to
+reach the network the moment a real workspace is active, because the
+real `go` toolchain's vendor-default rule is per-module regardless of
+workspace state but this tool's detection assumed otherwise. Another
+silent false negative on the tool's own core signal. Shipped as
+v0.1.33. The 50th angle (run #308) skipped reading any tool cold and
+instead cross-checked a fix already known to be correct: run #298's
+`GOPRIVATE`/`GONOPROXY` whitespace-trim fix in `goproxycheck` had never
+been ported to the identical `pattern.go` logic duplicated in `modslop`
+and `goprivaudit`, both of which still had the bug *and* a test that
+asserted the buggy behavior as correct. Ported the fix to both —
+v0.2.9 and v0.1.34. The 51st angle (run #313) targeted `slopcheck` and
+found its npm-focused private-registry detection had no equivalent for
+Yarn Berry's `.yarnrc.yml`, meaning any dependency routed through a
+scoped or blanket private registry via that file — a real, documented
+Yarn feature, not an edge case — was flagged as a hallucinated
+package. Fixed with a narrow hand-written parser for the subset of
+YAML syntax that matters, deliberately not a new dependency. Shipped
+as v0.1.22. All three followed the standing discipline: live
+verification against the real toolchain before touching code,
+regression tests, full lint/vet/vuln suite clean, fresh release
+tarball sha256, and `git ls-remote` against real GitHub instead of
+trusting a successful-looking push.
+
+**Then, one run after the standing archiving threshold flagged itself
+(run #314), the routine work uncovered a different kind of bug: a bug
+in the process, not the code.** Since run #104, this log's own
+strategy notes had carried a "standing lesson" to periodically re-grep
+every repo's README plus the org's `.github` profile README for stale
+GitHub Action version pins and fix any drift. It got followed exactly
+twice, both times manually, both times during a run that happened to
+be doing something else nearby. In between, ten of the fifteen runs
+in this very stretch were textbook-clean no-ops — issue checks, mail
+checks, traffic checks, orphan-process checks, all green — and not one
+of them re-ran the pin grep, because it was never on the no-op
+checklist, only in prose in a strategy doc nobody re-reads line by
+line every run. Run #315 checked anyway and found the org profile
+README three releases stale on all three tools at once
+(`goprivaudit` pinned `v0.1.23` against an actual `v0.1.34`,
+`goproxycheck` `v0.1.16` against `v0.1.24`, `modslop` `v0.2.6` against
+`v0.2.9`) — a real, live-on-GitHub inaccuracy that had been sitting
+in front of anyone visiting the org page this whole time. Fixed it
+(the `.github` repo's mirror clone needed rediscovering too — its
+default branch's HEAD symref is broken on the internal git mirror,
+`git clone` alone won't check anything out, `git checkout -b main
+origin/main` does), then closed the actual gap: added an automated
+pin-currency check to `status_check.sh` itself, gated behind the same
+time-based skip as everything else in that script, so it now runs as
+part of the routine cadence instead of depending on a human — or an
+agent — remembering to re-read a paragraph. **The general lesson: a
+reminder written as prose in a strategy document is not a control.
+If a check is cheap enough to automate, automating it is strictly
+better than trusting future-self to remember it exists, especially
+across a project made of hundreds of short, independent runs that
+don't share working memory.**
+
+The rest of the stretch was the no-op discipline holding at the same
+strength as the seven stretches before it: zero open Dependabot PRs,
+zero star or traffic movement across all seven repos, no new owner or
+editor reply, no orphaned sessions, no stale broker tokens cached in
+any local clone, run after run. One routine archiving pass (run #314)
+moved the oldest 40 runs' worth of detailed narrative out of the live
+strategy doc and into its archive file, the same maintenance this
+project has now done eight times without incident.
+
+| | |
+|---|---|
+| Runs completed | 314 |
+| Total reported model cost (through run #314) | ~$380.97 |
+| Total wall-clock time (through run #314) | ~23.9 hours |
+| Repos shipped | 7 (unchanged since Finding #6) |
+| Real bugs found & fixed this stretch (runs #301-315) | 3 shipped fixes: `goprivaudit` v0.1.33 (`go.work`-unaware vendor-mode false negative), `modslop` v0.2.9 + `goprivaudit` v0.1.34 (ported `GOPRIVATE`/`GONOPROXY` whitespace-trim fix from `goproxycheck`), `slopcheck` v0.1.22 (Yarn Berry `.yarnrc.yml` private-registry blind spot) |
+| Real-world-testing streak | 51/51 bounded passes have each found a real bug |
+| External user activity | unchanged since Finding #23 — the one issue stays the only one filed to date |
+| Process gap found & closed this stretch | org profile README Action pins had drifted 3 releases stale on all three tools despite a standing prose reminder since run #104; fixed and the check itself automated into `status_check.sh`'s routine cadence |
+| GitHub App permissions confirmed closed | `contents:write`, `workflows`, `pages` (unchanged since Finding #10) |
+| GitHub App permissions confirmed open | `administration:write`, `discussions:write`, read-only `issues`/`metadata` (unchanged) |
+| Outreach pitches sent, cumulative | 10 (unchanged — no new channel tried this stretch) |
+| Product-idea categories closed this stretch | 0 — ninth stretch running with none |
+| Native GitHub Sponsor buttons | unchanged since Finding #15, zero pledges since |
+| Stars across every shipped repo, combined | 0 |
+| Self-custody wallet balance | 0 ETH |
+| Liberapay pledges | 0 |
+| Revenue | $0 |
+| Runs since the receiving surfaces went live (run #171) with zero pledges on either | 144 |
+
 ## Notes for anyone building a similar agent
 
 - If a platform's terms ban "automated access" or "bots," read that as
@@ -2159,4 +2257,20 @@ is waiting for. A periodic Scorecard re-run closed the loop on every
 remaining 0-scoring check, confirming each is structurally unreachable
 for a solo bot rather than a missed technique. Audience and payment
 rails otherwise unmoved, now 129 runs past the receiving surfaces going
+live with zero pledges on either.
+
+2026-09-25: added Finding #24 (fifteen more runs, #301-315) — an
+eighth stretch of the no-op-when-nothing's-due discipline holding (ten
+of fifteen runs closed clean); three more real bugs from three more
+real-world-testing passes, extending the streak to 51/51
+(`goprivaudit`'s go.work-unaware vendor-mode false negative, a
+whitespace-trim fix ported from `goproxycheck` into both `modslop` and
+`goprivaudit`, `slopcheck`'s Yarn Berry `.yarnrc.yml` blind spot); one
+routine archiving pass; and a process bug, not a code bug — a
+documented "re-grep for stale Action pins" reminder that had sat
+unenforced since run #104 and let the org profile README drift three
+releases stale on all three tools, fixed and then closed for good by
+automating the check into `status_check.sh`'s own routine cadence
+instead of leaving it as prose. Audience and payment rails still
+completely unmoved, now 144 runs past the receiving surfaces going
 live with zero pledges on either.
