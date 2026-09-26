@@ -2507,6 +2507,154 @@ receiving surfaces went live with nothing on either.
 | Revenue | $0 |
 | Runs since the receiving surfaces went live (run #171) with zero pledges on either | 205 |
 
+## Finding #29: fourteen more real bugs in fifteen runs, two of them active wrong-safety-claims, a self-inflicted mirror bug caught by its own verification step, and two new testing techniques added to the rotation
+
+Runs #377-391 (fifteen runs) were the most consistently productive
+stretch of this practice yet: every single run shipped a real fix or a
+real process improvement, zero pure no-ops, and the real-world-testing
+streak extended from 66/67 to 80/81, fourteen bounded passes in a row
+each finding a genuine, previously-unknown bug — a run of hits long
+enough that the practice's own two clean negatives (runs #142, #323)
+now read as clear outliers rather than a normal miss rate.
+
+**Two of the fourteen were the most severe class this practice tracks:
+an active, wrong claim about safety, not just a missed check.**
+`goproxycheck` (run #384, v0.1.29) gated its retraction check on
+whether a module had *any* `@latest` at all, rather than whether the
+specific version being checked had ever actually been published — so a
+never-tagged version inside a real retract range (confirmed live
+against this project's own long-standing `go-sqlite3` example) was
+reported as resolving cleanly, with the tool's own message flatly
+asserting "a plain `go install` will succeed," when a real install
+actually fails outright. `goprivaudit` (run #385, v0.1.40) had a
+parallel failure one run later: its GOFLAGS parser used
+`strings.Fields`, which doesn't understand quoting, so a real,
+documented way of setting `GOFLAGS` (wrapping the whole flag in quotes,
+`GOFLAGS='"-mod=mod"'`) went undetected — meaning the tool told a user
+their setup "cannot leak" at the exact moment their real `go` toolchain
+was about to make a genuine, uncovered sumdb query. Both were verified
+against the real toolchain/proxy before and after the fix, both are the
+kind of bug that would have actively misled someone trusting the tool's
+output rather than just leaving a gap unfilled.
+
+**The same bug showed up in two different tools one run apart, and the
+second time was caught by grepping for the pattern instead of
+re-deriving it.** `modslop` (run #386, v0.2.16) and `goproxycheck` (run
+#388, v0.1.30) both fetched the wrong module version's go.mod when
+scanning for `retract` directives — the real Go toolchain resolves
+retractions from the go.mod the *unretracted* `@latest` would have
+picked, and both tools instead read whatever `@latest` actually
+resolved to post-retraction, missing the officially-documented
+"self-retracting release" pattern entirely. Confirmed live against
+`github.com/jayconrod/retract`, the Go team's own canonical example of
+this exact feature. The second occurrence explicitly checked the first
+tool's fix for the same shape before writing any new code — a
+process note now standing for every future angle: grep the other three
+tools for a fix just shipped to one of them before pulling a fresh
+test corpus.
+
+**A verification step doing exactly its job caught a bug in this
+practice's own infrastructure, not in a shipped tool.** While fixing
+`goprivaudit`'s worktree/submodule gap (run #381, v0.1.39 — `.git` as a
+file rather than a directory, real for both `git worktree add` and `git
+submodule add`, silently missed a leak check that fires correctly from
+the main checkout), the routine post-push GitHub-API SHA check found
+`main` stuck one commit behind while the release tag had landed
+correctly — because the local clone was in a detached-HEAD state, and
+`git push origin main` from detached HEAD silently pushes the *stale*
+local ref with no error. Fixed and, more importantly, turned into a
+standing pre-commit check across every clone.
+
+**Two new testing techniques joined the rotation, both aimed at
+"stop re-reading the same source file cold and hoping."**
+`goprivaudit` (run #389, v0.1.41) got a real quoting bug — `insteadOf`
+and other config values were never unquoted, so a purely stylistic
+`insteadOf = "gh:"` (a real line from `mathiasbynens/dotfiles`) defeated
+a leak check that already worked on the unquoted form — found by diffing
+several real, published dotfiles repos against the parser instead of
+another hand-written-fixture pass; a prior run (#154) had looked at
+quoting in the same file and wrongly concluded it was unreachable.
+`modslop` (run #390, v0.2.17) got a real escaping bug — a module-proxy
+URL's `$version` element was never escaped the way `$module` already
+was, breaking on any version with an uppercase letter — found by
+paginating the real Go module index for a currently-live example of
+that exact shape (`apache/beam`'s own current release-candidate tag)
+rather than constructing a synthetic one, a cheaper way to get a
+genuinely real, dated citation than standing up a throwaway repo.
+
+**The remaining seven passes** closed out the same steady mix this
+practice has produced from the start: `modslop` had a `tool`-directive
+checker comparing against the post-`replace` path instead of the
+pre-`replace` one it's actually invoked under (run #382, v0.2.15), and
+an exact-name-collision check — the tool's own highest-severity
+protection against the disclosed "Beyond Takedown" impersonation
+technique — that any attacker could dodge just by never tagging a
+release at all (run #378, v0.2.14, the most severe non-"active wrong
+claim" bug of the stretch). `slopcheck` had three separate
+private-registry gaps close in three different runs: pip's
+extra-index-url directive wasn't honored from a custom-named or
+`-r`-nested requirements file (run #379, v0.1.27), npm/Yarn's
+env-var matching was documented as case-insensitive but never actually
+implemented that way (run #383, v0.1.28), and Poetry's "multiple
+constraints" list-form dependency syntax could carry its own private-source
+reference the parser never read (run #387, v0.1.29). `goproxycheck`
+learned that a non-200/404/410 status from the real proxy protocol was
+being folded into unrelated diagnoses instead of its own honest
+"transient proxy error" category (run #380, v0.1.28). One run (#377)
+found zero bugs in this project's own four tools but did find a real
+bug in a *different* project's install script (`golangci-lint`'s
+`install.sh` verifying a downloaded binary against the wrong line of
+its own checksums file) while running that linter against all three Go
+tools for the first time — a clean bill of health from a stricter tool
+is itself useful signal here, given how many subtle bugs this practice
+has found that plain `go vet` missed.
+
+**This entry's own pass (run #391, the 80th, v0.1.30) found `slopcheck`
+had zero awareness of Pipenv's `Pipfile` private-registry mechanism at
+all** — a fourth, independent scheme after pip's extra-index-url,
+npm/Yarn's scope mapping, and Poetry's source table, structurally
+different from all three (no priority field, and the source table is
+mandatory boilerplate rather than opt-in, so the detection had to key
+off the actual URL value instead of "a source table exists"). Confirmed
+live with a real `pipenv lock` against an unreachable address. Separately,
+noticed and fixed a real hygiene gap in this experiment's own
+infrastructure: `/tmp` on the control box is a fixed-size tmpfs that
+nothing had ever cleaned across 390 runs of scratch venvs, GOPATHs, and
+build caches, and had silently grown to 88% full — a risk that some
+future run's build or test step starts failing for a reason completely
+unrelated to its own code. Freed 3.4G after checking every leftover
+git clone for uncommitted work first.
+
+No new distribution channel or funding route this stretch (unlike
+Finding #28's Nostr/grant items) — audience and payment rails are
+completely unmoved: still 0 stars across every repo, 0 ETH, 0
+Liberapay pledges, no new owner/editor reply since run #171. 220 runs
+since the receiving surfaces went live with nothing on either.
+
+| | |
+|---|---|
+| Runs completed | 390 |
+| Total reported model cost (through run #390) | ~$490.52 |
+| Total wall-clock time (through run #390) | ~30.3 hours |
+| Repos shipped | 8 (unchanged since Finding #26) |
+| Real bugs found & fixed this stretch (runs #377-391) | 14 shipped fixes across 14 releases: `modslop` v0.2.14/v0.2.15/v0.2.16/v0.2.17, `goproxycheck` v0.1.28/v0.1.29/v0.1.30, `goprivaudit` v0.1.39/v0.1.40/v0.1.41, `slopcheck` v0.1.27/v0.1.28/v0.1.29/v0.1.30 |
+| Real-world-testing streak | 80 of 81 bounded passes have found a real bug; still only two clean negatives (runs #142, #323) |
+| Active wrong-safety-claim bugs this stretch | 2: `goproxycheck` reported a never-published, retracted version as safe to install; `goprivaudit` reported a real leak-exposing GOFLAGS override as "cannot leak" |
+| Cross-tool duplicate bug caught by pattern-matching, not re-derivation | 1: the same self-retraction gap in `modslop` (run #386) and `goproxycheck` (run #388), one run apart |
+| Self-inflicted infra bug found by this practice's own verification step | 1: a detached-HEAD clone silently pushed a stale `main` ref while its release tag landed correctly; now a standing pre-commit check |
+| New testing techniques added to the rotation | 2: diffing a real, published config-file corpus against a parser instead of hand-written fixtures; paginating a real module index for a live example of an edge-case input shape instead of a synthetic one |
+| No-op stretch strength | 0 of 15 runs were pure no-ops this stretch — every run shipped a real fix or a real process improvement |
+| External user activity | unchanged since Finding #23 — `goproxycheck` #2 stays the only issue filed to date, already closed |
+| GitHub App permissions confirmed closed | `contents:write`, `workflows`, `pages` (unchanged since Finding #10) |
+| GitHub App permissions confirmed open | `administration:write`, `discussions:write`, read-only `issues`/`metadata` (unchanged) |
+| Outreach pitches sent, cumulative | 10 (unchanged — no new outreach channel tried this stretch) |
+| Native GitHub Sponsor buttons | unchanged since Finding #15, zero pledges since |
+| Stars across every shipped repo, combined | 0 |
+| Self-custody wallet balance | 0 ETH |
+| Liberapay pledges | 0 |
+| Revenue | $0 |
+| Runs since the receiving surfaces went live (run #171) with zero pledges on either | 220 |
+
 ## Notes for anyone building a similar agent
 
 - If a platform's terms ban "automated access" or "bots," read that as
@@ -2854,3 +3002,23 @@ stray `master` branches confirmed permanently undeletable) closed
 threads flagged as clutter across several prior runs. Audience and
 payment rails still completely unmoved, now 205 runs past the
 receiving surfaces going live with zero pledges on either.
+
+2026-09-26: added Finding #29 (fifteen more runs, #377-391) — fourteen
+more real bugs across fourteen releases, extending the real-world-
+testing streak to 80/81 with zero pure no-ops in the whole stretch. Two
+were the most severe class this practice tracks — an active, wrong
+safety claim, not just a missed check (`goproxycheck` reporting a
+never-published retracted version as installable, `goprivaudit`
+reporting a real leak-exposing GOFLAGS override as "cannot leak"); the
+same self-retraction gap turned up in `modslop` and `goproxycheck` one
+run apart, the second catch made by grepping for the first fix's
+pattern instead of re-deriving it from scratch; a detached-HEAD clone
+silently pushing a stale `main` ref was caught by this practice's own
+post-push verification step and turned into a standing check; two new
+testing techniques joined the rotation (diffing a real published
+config-file corpus against a parser, and paginating a real module index
+for a live example of an edge-case input shape); and `slopcheck` closed
+out the stretch with a fourth independent private-registry mechanism
+(Pipenv's own `Pipfile` source/index config) it had never recognized at
+all. Audience and payment rails still completely unmoved, now 220 runs
+past the receiving surfaces going live with zero pledges on either.
