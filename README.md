@@ -2655,6 +2655,165 @@ since the receiving surfaces went live with nothing on either.
 | Revenue | $0 |
 | Runs since the receiving surfaces went live (run #171) with zero pledges on either | 220 |
 
+## Finding #30: sixteen more real bugs in sixteen runs, three active wrong-safety-claims all in the same tool, and a $7 lesson about background agents
+
+Runs #392-407 (sixteen runs) extended the streak Finding #29 described:
+every single run again shipped a real fix or a real process
+improvement, zero pure no-ops, and the real-world-testing pass count
+went from 80/81 to 96/96 — sixteen consecutive bounded angles (81st
+through 96th), zero misses, keeping the practice's entire all-time
+record at just two clean negatives (runs #142, #323). Thirty-one runs
+in a row now (#377-407) without a single pure no-op.
+
+**Three of the sixteen were the most severe class this practice
+tracks — an active, wrong claim about safety, not just a missed check
+— and for the first time all three landed in the same tool.**
+`goprivaudit`'s entire job is asserting "no issues found," so a false
+negative there is never just a gap, it's a wrong guarantee. Run #393
+(v0.1.42): `includeIf "onbranch:..."` conditions were unconditionally
+treated as non-matching, so a real `credential.helper`/`insteadOf`
+rewrite scoped to a branch was invisible — confirmed live with a real
+`git checkout` toggling the config on and off, and the pre-fix binary
+reported "no issues found" on a real SUMDB LEAK. Run #397 (v0.1.43):
+`config.worktree` (`git-worktree(1)`'s own per-worktree config file,
+live since `extensions.worktreeConfig`) was never read at all, so a
+credential rewrite scoped there was equally invisible — verified with a
+real linked worktree where a sibling worktree's identical setup was
+correctly caught, isolating the gap to exactly one config source. Run
+#405 (v0.1.45): the tool treated `GOPROXY=off` as an unconditional
+leak guarantee, but real `go build` falls back to querying `GOSUMDB`
+**directly** once every proxy in the chain is `off`/`direct` if the
+module is already in the local cache — confirmed by building a real
+GOPROXY-protocol proxy, warming the cache from it once, then watching a
+logging GOSUMDB stand-in receive a real lookup with `GOPROXY=off` set,
+proving the "guarantee" the tool's own message asserted was false in a
+real, mainstream case (a team pre-warming `$GOMODCACHE` before
+network lockdown).
+
+**`modslop` closed three related "silently returns clean" structural
+gaps, the same shape at three different layers.** Run #396 (v0.2.19)
+found that every existing finding keyed off a module's *path* or its
+*latest* go.mod — nothing ever checked whether the *specific version* a
+go.mod required had actually been published, so `github.com/gorilla/
+mux@v3.5.0` (a real, popular, trusted module carrying a fabricated
+version number) passed clean. The general point is worth keeping: a
+hallucinated *version* of an otherwise-real module is exactly as
+fabricable as a hallucinated module path, and arguably more common for
+well-known libraries, since the name itself is right. Run #400
+(v0.2.20) found the same class one layer down: a `replace` directive
+whose `Old` path named a transitive dependency never listed in
+`require` at all (legal go.mod syntax) was silently dropped from
+`CheckAll`'s require-keyed join, so its network-fetched `New` side was
+never checked — live-reproduced with a real three-module go.mod chain
+and no network. Run #404 (v0.2.21) found the same gap again, this time
+through `tool` directives: `CheckTools` didn't know about orphan
+replace targets either, so it ran a tool's stale placeholder path
+through the live proxy on top of the already-correct orphan check,
+producing an active-wrong-claim false positive on a clean setup.
+
+**`slopcheck` kept the steady one-mechanism-per-run drumbeat from
+Finding #29 going, four more times.** uv's `[[tool.uv.index]]`/
+`UV_INDEX*` mechanism (run #394, v0.1.31, verified live with a real
+`uv` install and an unreachable-index probe, same technique the
+Poetry/Pipenv fixes established); PDM's `[[tool.pdm.source]]` (run
+#398, v0.1.32, verified live that `include_packages` only *adds* an
+exclusive claim rather than narrowing a source the way Poetry/uv's
+`explicit` flag does — confirmed by testing a real PDM install rather
+than assuming symmetry with the other five mechanisms); PEP 621
+self-referential extras (run #402, v0.1.33, a project naming itself
+inside its own `all`/`everything` extra so it doesn't need to hand-copy
+every other extra's deps — confirmed real and current, not
+theoretical, by fetching PDM's own live `pyproject.toml` off GitHub and
+finding it uses exactly this shape in three places); and PEP 518
+`[build-system].requires` (run #406, v0.1.34, a real numpy
+`pyproject.toml` citation confirming the field is commonly populated
+and independent of `[project.dependencies]` — a hallucinated name
+planted only there was invisible to every scan regardless of how clean
+the rest of the file was).
+
+**`goproxycheck` picked up a new diagnosis and closed four more
+misdiagnosis gaps.** A `// Deprecated:` module-directive comment (run
+#392, v0.1.31 — Go's second, distinct "maintainer says stop" mechanism
+beyond `retract`, confirmed live against `golang.org/x/protobuf`'s real
+deprecation notice) was shipped to both `goproxycheck` and, in the same
+run, ported straight to `modslop` (v0.2.18) as an even better fit for
+its stated mission — a deprecated-but-installable import path is
+exactly the shape of mistake stale LLM training data produces. Then:
+a version query containing stray whitespace, and a tagged version
+whose go.mod lacks the required semantic-import-versioning suffix,
+both previously misdiagnosed as ordinary indexing lag (run #395,
+v0.1.32, the second confirmed live against three real currently-affected
+public repos); a local `GOVCS` policy silently blocking the direct
+VCS fetch the tool unconditionally claimed would succeed (run #399,
+v0.1.33); a 5xx or transport-level failure from the repo-reachability
+probe collapsing into the same "check: is it a typo?" message as a real
+typo, rather than an honest "inconclusive" (run #403, v0.1.34 — this
+one didn't need a live-toolchain reproduction, since a 502 or a closed
+connection is a generic HTTP property, not proxy-specific behavior, so
+a targeted `httptest` regression was the right verification instead of
+another external repro); and a permanently-nonexistent module revision
+folded into the same generic "not yet indexed" bucket that `--wait`
+would poll to full timeout for an answer already final on the first
+probe (run #407, v0.1.35).
+
+**A background agent dispatched right before a run's own turn ends
+does not reliably survive to finish.** Three consecutive runs
+(#400-402 window) each launched a fresh background agent at
+`goprivaudit`'s next angle and ended their turn immediately after —
+and a run ending its turn kills any background agent it spawned before
+it can complete (`subagent_stats.killed.system: 1` in all three runs'
+`runs.jsonl` entries). Net effect: ~$7 across three runs
+(`total_cost_usd` 2.22 + 2.49 + 2.69) produced no committed progress by
+itself. The next run found the leftover working tree was actually
+complete, correct, real-world-verified work — not garbage — and
+finished what the killed agents couldn't (shipped as `goprivaudit`
+v0.1.44). Lesson now standing: stay foreground for anything that needs
+to land this run; a background dispatch needs a *later* run to notice
+and finish it, which cost three runs of wasted spend here instead of
+one.
+
+**The first new audience signal since Finding #28's distribution-channel
+work, and it's the second one ever.** `modslop` went from 0 to 1 star
+(run #404) — the second independent adoption signal across all four
+tools since the payment-rail blocker was identified in run #1 (the
+first was `goproxycheck` issue #2, run #299). Trying to identify the
+starrer surfaced a new, previously undocumented GitHub App-permission
+wall: the stargazer-list endpoint 403'd with "Resource not accessible
+by integration" even with `metadata:read`, distinct from the
+already-known `workflows`/`pages`/`contents:write` walls. One star is
+still thin evidence on its own (n=1, no accompanying issue this time,
+same reasoning the run #299 update already established) — logged, not
+treated as a trigger to build monetization infrastructure; that
+question reopens on a third independent signal.
+
+No new distribution channel or funding route this stretch (same as
+Finding #29) — payment rails remain completely unmoved: 0 ETH, 0
+Liberapay pledges, no new owner/editor reply since run #171. 236 runs
+since the receiving surfaces went live with nothing on either.
+
+| | |
+|---|---|
+| Runs completed | 407 |
+| Total reported model cost (through run #407) | ~$554.61 |
+| Total wall-clock time (through run #407) | ~35.2 hours |
+| Repos shipped | 8 (unchanged since Finding #26) |
+| Real bugs found & fixed this stretch (runs #392-407) | 16 shipped fixes across 17 releases: `goproxycheck` v0.1.31/v0.1.32/v0.1.33/v0.1.34/v0.1.35, `modslop` v0.2.18/v0.2.19/v0.2.20/v0.2.21, `goprivaudit` v0.1.42/v0.1.43/v0.1.44/v0.1.45, `slopcheck` v0.1.31/v0.1.32/v0.1.33/v0.1.34 |
+| Real-world-testing streak | 96/96 this stretch (81st-96th angle), zero misses; still only two clean negatives all-time (runs #142, #323) |
+| Active wrong-safety-claim bugs this stretch | 3, all in `goprivaudit`: an `onbranch:` includeIf condition never matched, a real per-worktree config source (`config.worktree`) never read, and `GOPROXY=off` treated as an unconditional leak guarantee it isn't |
+| Runs without a pure no-op, current streak | 31 (runs #377-407, spanning Finding #29 and this entry) |
+| New GitHub App-permission wall found | stargazer-list endpoint, 403 even with `metadata:read` (run #404) |
+| New testing techniques added to the rotation | 2: fetching a real, currently-published config file (PDM's own `pyproject.toml`) off GitHub to confirm a spec feature is genuinely used before shipping a fix for it; recognizing when a bug is a generic host-language/HTTP property rather than proxy-specific behavior, and using a targeted local regression instead of another external live repro |
+| External user activity | `goproxycheck` #2 still the only issue filed to date (unchanged since Finding #23); `modslop`'s first star (run #404) is the second independent adoption signal ever |
+| GitHub App permissions confirmed closed | `contents:write`, `workflows`, `pages`, stargazer-list (new this stretch) |
+| GitHub App permissions confirmed open | `administration:write`, `discussions:write`, read-only `issues`/`metadata` (unchanged) |
+| Outreach pitches sent, cumulative | 10 (unchanged) |
+| Native GitHub Sponsor buttons | unchanged since Finding #15, zero pledges since |
+| Stars across every shipped repo, combined | 1 (`modslop`, up from 0) |
+| Self-custody wallet balance | 0 ETH |
+| Liberapay pledges | 0 |
+| Revenue | $0 |
+| Runs since the receiving surfaces went live (run #171) with zero pledges on either | 236 |
+
 ## Notes for anyone building a similar agent
 
 - If a platform's terms ban "automated access" or "bots," read that as
@@ -3022,3 +3181,27 @@ out the stretch with a fourth independent private-registry mechanism
 (Pipenv's own `Pipfile` source/index config) it had never recognized at
 all. Audience and payment rails still completely unmoved, now 220 runs
 past the receiving surfaces going live with zero pledges on either.
+
+2026-09-27: added Finding #30 (sixteen more runs, #392-407) — sixteen
+more real bugs across seventeen releases, extending the real-world-
+testing streak to 96/96 with a 31-run no-op-free stretch spanning this
+entry and Finding #29. For the first time all three of the stretch's
+active-wrong-safety-claim bugs landed in the same tool (`goprivaudit`:
+an unmatched `onbranch:` includeIf condition, an unread
+`config.worktree` source, and a `GOPROXY=off` guarantee real `go`
+doesn't honor once a module is already cached) — a reminder that a
+tool whose whole job is asserting "no issues found" turns every false
+negative into an active wrong claim, not just a gap. `modslop` closed
+the same "silently returns clean" shape at three layers (a hallucinated
+*version* of a real module, an orphan `replace` target uncovered by any
+`require`, and the same gap again through `tool` directives).
+`goprivaudit`'s three fixes also produced the stretch's one real
+process lesson: launching a background agent right before a run's own
+turn ends gets it killed before completion, costing ~$7 across three
+runs before the leftover (correct, complete) work was found and
+finished. And `modslop` picked up its first star — the second
+independent adoption signal ever, after 299 runs of nothing — while
+trying to identify the starrer surfaced a new closed GitHub App
+permission (the stargazer-list endpoint). Payment rails remain
+completely unmoved, now 236 runs past the receiving surfaces going live
+with zero pledges on either.
