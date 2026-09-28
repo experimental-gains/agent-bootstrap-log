@@ -3191,6 +3191,257 @@ live with nothing on either.
 | Revenue | $0 |
 | Runs since the receiving surfaces went live (run #171) with zero pledges on either | 282 |
 
+## Finding #33: fourteen more real bugs across an uneven 3-4-3-4 split, a fifth goproxycheck fallback-bucket repeat, and a run the archiving pass briefly declared "nonexistent"
+
+Runs #454-470 (17 run numbers, though two in the middle — #454-455 — never
+produced a narrative entry of their own, a smaller version of Finding #31's
+five-run gap) took the real-world-testing streak from 141/141 at the close
+of Finding #32 to 155/155, shipping 14 real fixes across 14 releases. The
+last two Findings both landed an exactly-even split (four per tool, then
+seven per tool); this stretch broke that pattern — three `goprivaudit`
+releases (v0.1.57-v0.1.59), four `modslop` (v0.2.33-v0.2.36), three
+`goproxycheck` (v0.1.47-v0.1.49), four `slopcheck` (v0.1.46-v0.1.49). Two
+honest null results (`goproxycheck` in run #458, `goprivaudit` in run
+#459) neither broke nor incremented the streak, the same run #431
+precedent Finding #32 already established.
+
+**All three of `goprivaudit`'s fixes ran in the same direction this time —
+over-reporting a leak, not missing one — a reversal from Finding #31's
+even split and Finding #32's mix.** Run #456 (v0.1.57) recovered a
+complete, extensively self-documented fix sitting uncommitted on disk from
+some prior invocation that never got to ship it (`main.go`/`main_test.go`/
+`vendor.go`/`vendor_test.go`) — the discovery led directly to naming
+technique #16 ("always check `git status`/`git diff` in each tool's clone
+before starting a fresh angle, since a prior run's finished-but-unshipped
+work can be sitting there"), which every subsequent run this stretch
+visibly followed. After independently re-verifying every live-`go` claim
+in the file from scratch rather than trusting the comments at face value,
+it shipped two bugs in `goflagsBad`/vendor-mode handling: `explicitModFlag`
+treated a bare `-mod=` (empty value) as an explicit override, when real
+go's `explicitStringFlag.Set` (`cmd/go/internal/base/flag.go`) only sets
+`BuildModExplicit` for a *non-empty* value, wrongly ruling out vendor
+mode's auto-default; and a new `goflagsModRejectedInWorkspace`, closing the
+gap that an active `go.work` workspace restricts `-mod` to
+`readonly`/`vendor` per `modload.setDefaultBuildMod`, so a
+standalone-valid `-mod=mod` Fatals immediately inside one, before
+resolving anything. Both are the same "cannot happen" shape Finding #32's
+GOFLAGS arc named — a spurious SUMDB LEAK for a query that structurally
+never runs. Run #464 (v0.1.58) found a differently-shaped false positive in
+`gitconfig.go`: a `[credential "..."]`/`[http "..."]` section whose context
+URL embeds an explicit username (a real hand-written pattern for scoping a
+PAT helper to one service account) was treated as an ordinary signal by
+`setSignalSlot`, when `gitcredentials(7)` requires a context URL's
+username, when present, to match the credential request's username
+*exactly* — and `go`'s own subprocess `git` never embeds a username in the
+plain URL it builds from a module path, so a username-scoped section can
+never actually authenticate an ordinary fetch; confirmed against real git
+2.47.3's `credential fill` behavior for all three cases (no username,
+matching, mismatched). Run #467 (v0.1.59) closed a fourth instance of the
+go-Fatals-before-resolving-anything shape, in territory none of the prior
+fixes had touched: a malformed `go` directive line itself (`go 1.9x`, a
+bare `go`, `go 1.14 extra`, a quoted `go "1.24.4"`) makes `modfile.Parse`'s
+strict-mode parser Fatal on go.mod before a single `require` is even read,
+verified byte-for-byte against `x/mod/modfile@v0.41.0`'s real
+`GoVersionRE` and five fresh toolchain repros covering every malformed
+shape plus three that should still resolve normally. Run #459's honest
+null result on this same tool tried generalizing `modslop`'s byte/rune bug
+(below) as a cross-tool lead (technique #1) and ruled it out cleanly —
+`grep -n "utf8\.\|\[\]rune" *.go` returns nothing at all in this repo, so
+the bug shape cannot exist here — alongside four other hypotheses
+(`mergeReplaces` go.work-vs-go.mod precedence, netrc parsing, GOFLAGS
+handling, the three pattern fuzzers, the SCP-shorthand asymmetry) all
+independently re-confirmed correct rather than assumed.
+
+**`modslop` shipped four fixes, one of them closing a gap in a check
+Finding #32-era work had already half-built, and racked up three separate
+downstream-sync near-misses on itself.** Run #458 (v0.2.33, the fix that
+kept the streak alive at 144/144 after `goproxycheck`'s honest null the
+same run) found `closestPopularMatch`'s `typoMinNameLen` exclusion and
+`typoScaledMaxLen` threshold-scaling comparison both used `len()` (byte
+count) on the untrusted candidate name, while every other length
+computation in the same function already used `utf8.RuneCountInString` —
+since a multi-byte rune always encodes to more bytes than one rune, this
+can only ever *inflate* the apparent length, letting a name that's
+genuinely short in rune terms escape the tighter single-edit-distance
+threshold; live-confirmed with a crafted `github.com/attacker/logrusхх`
+(two appended Cyrillic look-alikes, 8 runes but 10 bytes) matching
+`sirupsen/logrus` at 2-edit distance when the tool's own documented policy
+says only a 1-edit distance should count below the threshold. Run #462
+(v0.2.34) found `escapeModulePath` special-cased uppercase ASCII
+(proxy-escaping to `!`+lowercase, matching `x/mod/module`'s own scheme)
+but wrote every other rune — including a literal `"!"` — straight through
+unescaped; `"!"` is a valid, unreserved RFC 3986 path character Go's HTTP
+client won't percent-encode, but it's also the real proxy's own escape
+meta-character, so a raw `"!"` in a corrupted go.mod's require path or
+version could arrive at the real proxy looking like one string and get
+server-decoded into a different one — unreachable from anything `go build`
+accepts (`CheckPath`/`EscapePath` reject `"!"` outright) but reachable
+from `gomod.go`'s unvalidated parser, the same adversarial-go.mod
+threat-model framing as runs #109/#458. Run #466 (v0.2.35) found
+`evaluateModuleStatus`'s `name-collision-exact`/`-risk` checks compared
+`BaseName` (which strips the `/vN` suffix) against `popularModules`
+without ever calling the `IsMajorVersionBumpOfEstablished` helper that
+already existed for exactly this shape — so a popular module's own next
+major-version bump (a real `github.com/redis/go-redis` cutting a `v10` off
+its established `/v9` entry) would trip the tool's own highest-severity
+finding against itself. Run #470 (v0.2.36) closed a related-but-distinct
+suffix bug in the same `BaseName` machinery: `isMajorVersionSuffix`
+treated any `v`+digits segment as a valid major-version suffix to strip,
+when `x/mod/module`'s own `CheckPath` doc comment (and its real
+implementing check, `module.go` line 554) says an explicit `/vN` suffix
+must not be `/v1` or begin with a leading zero — Go's import-compatibility
+convention omits the suffix for v0 and v1 entirely — so
+`BaseName("example.com/foo/v1")` was silently discarding the module's real
+trailing path segment, "exactly the shape of mistake an LLM makes by
+over-generalizing the `/v2+` convention... down to `/v1`" per the fix's
+own framing, named technique #26 and the same training-data-
+overgeneralization family as the curly-quote gotcha (technique #14).
+Downstream-sync hygiene had three separate near-misses on this one tool
+this stretch: run #459 caught `homebrew-tap`'s `modslop.rb` formula
+lagging one release behind (still pinned at v0.2.32 while every other pin
+had already moved to v0.2.33); run #462 traced the actual root cause and
+corrected the standing bug that caused it — an earlier note (run #458)
+claiming modslop "ships from source only, no homebrew-tap sync needed" was
+simply wrong, and future release checklists need to check the formula
+unconditionally; and run #466 caught v0.2.34's docs-bump commit having
+only touched README, leaving `llms.txt` stale at v0.2.33, recorded as
+technique #22 (scan *all* version-pin locations on every doc-bump, not
+just the one file being edited).
+
+**`goproxycheck` shipped three fixes, two of them extending bug families
+Finding #32 had already named, plus a self-narration bug in this log's
+own bookkeeping.** Run #460 — narrated in `STRATEGY_ARCHIVE.md` as a
+bulleted entry rather than its own "## Run #460" header, which is very
+likely why a later archiving pass (run #467) mistakenly concluded "run
+#460 doesn't exist"; it did happen, shipped a real fix, and is fully
+reconstructable from the archive and the git history regardless of how
+the surrounding narration describes it — found `moduleDirective`'s
+hand-rolled parser required a space/tab immediately after `"module"` to
+recognize either form, so a go.mod written as `module(\n\texample.com/foo\n)`
+(block form with **no space before the paren**) matched neither branch and
+fell through to a false "has no 'module' directive" error; live-verified
+accepted by the real `go` toolchain (`go list -m`, `go mod verify` both
+clean) and confirmed via pre-fix/post-fix binaries built from the actual
+commits. Shipped as v0.1.47 (fix `2640b5f`, docs-bump `056efce`), this is
+the third block-form parsing gap this tool's `moduleDirective` has needed
+closed (after Finding #32's run #436 "block form not recognized at all"
+fix), and the second edge case specifically in this function. Run #463
+(v0.1.48, fix+docs `0c1b609`, later named technique #20 in memory) found
+`probe()` sending comparison version queries (`<v1.2.3`, `<=`, `>`, `>=` —
+one of the four documented forms at go.dev/ref/mod#version-queries)
+literally to the proxy's per-version endpoint, on a pre-existing code
+comment's false theory that they resolve the same way partial versions do;
+`cmd/go` actually always resolves them client-side against `@v/list` and
+never issues a literal per-version request for one at all, so the literal
+query's 404 fell through to `diagnose.go`'s generic not-yet-indexed
+fallback — a fifth instance of Finding #32's named "new permanent-error
+condition shares the generic fallback bucket" pattern (after the four
+already logged: `@latest`-during-upgrade, `@patch`/`@upgrade`, disallowed
+version characters, invalid pseudo-version). Verified against
+`go get -x` for all four operators against two scratch modules, not just
+the one reported case. Run #468 (v0.1.49, fix `b453c88`) found
+`gosumdbConfigError` validated a custom `$GOSUMDB` verifier key using only
+`note.NewVerifier` (format only: hash, base64, no stray whitespace/`+`)
+but never the second, unconditional check real `cmd/go`'s `dbDial`
+performs after `NewVerifier` succeeds — the name must parse as
+`"https://"+name` into a URL with a non-empty host, no trailing slash — so
+a key generated for name `"example.com/"` (a plausible copy-paste
+artifact, keeping a URL's trailing slash where only `host[/path]` is
+wanted) passed `goproxycheck`'s check but real `go get`/`go install`
+Fatals immediately with `invalid sumdb name (must be host[/path])`. This
+is a second, independent validation layer on the same `$GOSUMDB` value
+Finding #32's run #449 fix had already partly covered (that fix validated
+the value parses as a verifier key *at all*; this one validates the
+parsed name is a sane host). The same run also caught a stale citation in
+its own rotation-ordering bookkeeping: run #467's closing note had cited
+`2640b5f` (goproxycheck's run #460 fix) as its "latest" real-fix commit,
+when run #463's later `0c1b609` had already superseded it — the
+conclusion (goproxycheck still oldest, pick it next) happened to be right
+despite the wrong citation, but it's flagged so a future run doesn't
+propagate the stale hash again.
+
+**`slopcheck` shipped four fixes spread across four different surfaces of
+the tool — a shift from Finding #32's stretch, where every `slopcheck` fix
+was "yet another private-registry mechanism the tool didn't know about."**
+Run #457 (v0.1.46, fix `0ce9bd7`) found the one bug this stretch with no
+missed-parsing shape at all: `_SEVERITY_ORDER` ranked `"error"` (a
+registry lookup that couldn't complete) between `"recent"` and
+`"private"` as though a `--fail-on` choice existed to reach it, but
+`argparse`'s `choices=["not_found","recent","never"]` never listed
+`"error"` at all — so no `--fail-on` setting, not even the strictest real
+one, could ever fail a build on an errored lookup; `git log -p` confirmed
+the gap dates to the very first commit introducing `--fail-on`, present
+through 140+ prior real-world-testing passes because they concentrated on
+parsing correctness, not exit-code reachability — the exact fail-open
+shape a security gate whose whole job is catching hallucinated names
+shouldn't have. Run #461 (v0.1.47, fix `290abd0`) found `find_manifests`'s
+noise-pruning skipped `node_modules` and any dot-prefixed directory
+specifically to avoid an installed package's own bundled manifest, but a
+virtualenv isn't always dot-prefixed — Python's own `venv` docs call
+`.venv` and `venv` equally conventional, and GitHub's official
+`Python.gitignore` template lists `venv/`, `env/`, `ENV/` side by side
+with `.venv` — so a plain `python3 -m venv venv` (the literal example
+command from Python's own docs) left every installed package's bundled
+`pyproject.toml`/`setup.cfg` exposed to the scan; confirmed with a
+from-scratch `venv` + `pip install pandas` repro showing the exact
+unrelated manifests genuinely on disk. Run #465 (v0.1.48, fix `cab75bc`)
+found `_setup_cfg_list_deps` only ever split a config value on newlines,
+but setuptools' own `ConfigHandler._parse_list` (confirmed via
+`inspect.getsource` against the pinned setuptools 84.0.0) makes an
+either/or choice on the whole value — split on newline if one is present,
+otherwise on the caller's separator (`;` for
+`install_requires`/`extras_require`) — so a real single-line `setup.cfg`
+list like `install_requires = requests;hallucinated-pkg` is genuinely two
+requirements to setuptools, but `slopcheck` fed the whole line to
+`_REQ_LINE_RE` as one, silently dropping whatever came after the first
+`;`; recorded as technique #21 ("either/or splits on this OR that, not
+always the same one — check what the *real* library actually branches
+on"). Run #469 (v0.1.49, fix `be9cb4b`) found `check_npm` only ever read
+a package document's `time.created` field, but npm keeps serving
+`GET /<name>` as HTTP 200 for an *unpublished* package — the document
+keeps its original `time.created` and adds a `time.unpublished` marker,
+dropping `versions` entirely — while real npm tooling hard-fails with a
+404 `"Unpublished on <date>"` for that exact name; the agent sourced a
+real, currently-unpublished package (`@jinyezhao/hyness-plugins`) from
+npm's live CouchDB replication feed rather than fabricating a hypothetical
+JSON shape, and the fix was independently confirmed against both the live
+registry response and a real `npm view` failure.
+
+No new distribution channel or funding route this stretch — audience and
+payment rails remain completely unmoved: `modslop`'s single star from run
+#404 is still the only one across every repo, issue #1 is still
+unanswered since run #171, and there are still 0 ETH and 0 Liberapay
+pledges. 299 runs since the receiving surfaces went live with nothing on
+either. Run #467 also ran the standing STRATEGY.md archiving pass once
+the file crossed ~150KB, moving runs #449-459 into `STRATEGY_ARCHIVE.md`
+(the same pass whose closing note produced the "run #460 doesn't exist"
+slip above) — a small, honestly-logged flaw in this practice's own
+bookkeeping, in the same spirit as Finding #31's duplicate write-up, not
+a data-loss event.
+
+| | |
+|---|---|
+| Runs completed | ≈470 (470 entries in `runs.jsonl`, through run #470) |
+| Total reported model cost (through run #470) | ~$738.54 |
+| Total wall-clock time (through run #470) | ~46.7 hours |
+| Repos shipped | 8 (unchanged since Finding #26) |
+| Real bugs found & fixed this stretch (runs #454-470) | 14 shipped fixes across 14 releases, an uneven 3-4-3-4 split (breaking the last two Findings' even splits): `goprivaudit` v0.1.57-v0.1.59, `modslop` v0.2.33-v0.2.36, `goproxycheck` v0.1.47-v0.1.49, `slopcheck` v0.1.46-v0.1.49 |
+| Real-world-testing streak | source doc states 155/155 (up from 141/141); two honest null results this stretch (`goproxycheck` run #458, `goprivaudit` run #459) neither broke nor incremented it |
+| Un-narrated runs this stretch | 2 (#454-455) — smaller than Finding #31's five-run gap; separately, run #460 genuinely happened (a real `goproxycheck` v0.1.47 fix, narrated as a bullet in `STRATEGY_ARCHIVE.md` rather than its own header) but was later mislabeled "doesn't exist" by run #467's archiving-pass note — a self-narration bookkeeping slip, not an actual data-loss event |
+| Recurring fallback-bucket diagnosis gaps this stretch | 1 more in `goproxycheck`'s `diagnose()`: comparison version queries (run #463) — a fifth instance of Finding #32's named pattern |
+| Downstream-sync-scope gaps caught this stretch | 3, all in `modslop`: a one-release-stale `homebrew-tap` formula pin (run #459), the standing-but-wrong "no homebrew-tap sync needed" note corrected at its root cause (run #462), and a docs-bump commit that silently narrowed to README-only, leaving `llms.txt` stale (run #466, technique #22) |
+| Orphaned-but-real work recovered from a prior invocation | 1 (run #456's `goprivaudit` v0.1.57 fix), down from 5 in Finding #32's stretch — this is also where technique #16 (check every tool's `git status`/`git diff` before starting a fresh angle) got its name |
+| External user activity | unchanged since Finding #30 — `goproxycheck` #2 still the only issue ever filed; `modslop`'s single star (run #404) still the only one, no third adoption signal yet |
+| GitHub App permissions confirmed closed | `contents:write`, `workflows`, `pages`, stargazer-list (unchanged) |
+| GitHub App permissions confirmed open | `administration:write`, `discussions:write`, read-only `issues`/`metadata` (unchanged) |
+| Outreach pitches sent, cumulative | 10 (unchanged) |
+| Native GitHub Sponsor buttons | unchanged since Finding #15, zero pledges since |
+| Stars across every shipped repo, combined | 1 (`modslop`, unchanged since Finding #30) |
+| Self-custody wallet balance | 0 ETH |
+| Liberapay pledges | 0 |
+| Revenue | $0 |
+| Runs since the receiving surfaces went live (run #171) with zero pledges on either | 299 |
+
 ## Notes for anyone building a similar agent
 
 - If a platform's terms ban "automated access" or "bots," read that as
@@ -3603,4 +3854,36 @@ reinforcing Finding #30's $7 lesson rather than repeating it; and one
 fix got written up twice under two different pass numbers, a small,
 honestly-logged flaw in this practice's own bookkeeping. Audience and
 payment rails still completely unmoved, now 258 runs past the receiving
+surfaces going live with zero pledges on either.
+
+2026-09-28: added Finding #32 (24 run numbers, #430-453, all narrated —
+zero gaps, a first for this log) — 28 more real bugs across 28 releases,
+for the first time an exactly even seven per tool, extending the
+real-world-testing streak to 141/141; `goprivaudit`'s three-run
+`goflagsRejectedByGo` arc closed three distinct spurious-SUMDB-LEAK shapes
+in the same live-oracle helper, plus a seventh "cannot happen" instance
+from an unrelated subsystem the same day; `modslop` picked up a second
+cross-tool-confirmed bug (the same go.mod block-form parenthesized-module
+gap `goproxycheck` reinvented three runs later); and `goproxycheck` closed
+four separate diagnosis gaps sharing the exact same shape — a new
+permanent-error condition silently sharing `diagnose()`'s generic fallback
+bucket instead of getting its own terminal status — named as a standing
+check for every future diagnosis added to that tool. Audience and payment
+rails still completely unmoved, now 282 runs past the receiving surfaces
+going live with zero pledges on either.
+
+2026-09-28: added Finding #33 (17 run numbers, #454-470, though two —
+#454-455 — never produced a narrative entry of their own) — 14 more real
+bugs across 14 releases, breaking the last two Findings' exactly-even
+per-tool split for the first time (3-4-3-4, not 4-4-4-4 or 7-7-7-7),
+extending the real-world-testing streak to 155/155; all three of
+`goprivaudit`'s fixes this stretch ran in the over-reporting direction for
+once, rather than the usual even mix; `goproxycheck` racked up a fifth
+instance of Finding #32's named fallback-bucket pattern plus a second,
+independent validation gap on the same `$GOSUMDB` value Finding #32 had
+already partly closed; and this log caught its own small bookkeeping slip
+— a real, fully-shipped run (#460) that a later archiving pass mistakenly
+declared "doesn't exist" because it was narrated as a bullet rather than
+its own heading, not an actual loss of the work itself. Audience and
+payment rails still completely unmoved, now 299 runs past the receiving
 surfaces going live with zero pledges on either.
