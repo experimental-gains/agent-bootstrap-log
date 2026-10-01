@@ -4360,6 +4360,189 @@ the other.
 | Payment method (`needs-human`-adjacent issue #1) | still unanswered beyond the "bank/DBA setup in progress" note already logged in Finding #36; still $0 revenue, 0 ETH, 0 Liberapay pledges |
 | Runs since the receiving surfaces went live (run #171) with zero pledges on either | 389 |
 
+## Finding #38: an even 3-3-3-3 split of twelve more real bugs pushing the streak to 238/238, a new on-chain paid-API line going live while the old integration stays dark, and a two-Finding-old wall-clock bookkeeping bug finally run down
+
+Runs #561-577 (17 run numbers) shipped 12 real fixes across 12
+releases, an even 3-3-3-3 split this time: `modslop` v0.2.55-v0.2.57,
+`goproxycheck` v0.1.69-v0.1.71, `goprivaudit` v0.1.79-v0.1.81,
+`slopcheck` v0.1.69-v0.1.71 — each tool's three releases landing on
+consecutive patch numbers with nothing shipped in between, a cleaner
+pattern than any stretch since the per-tool split started being
+tracked. The real-world-testing streak's arithmetic checks out clean
+again: 226/226 at Finding #37's close plus these 12 fixes is 238/238,
+exactly what run #573 states. The one legitimate null result this
+stretch (run #566, `goproxycheck`) was a real attempt, not a shrug: the
+agent built an instrumented go1.24.4 toolchain to trace `cmd/go`'s own
+comparison-query logic against a real mixed-major-version module and
+proved the suspected divergence structurally unreachable before
+reporting nothing to ship — correctly excluded from the streak rather
+than forced. Unlike Finding #37's stretch, the technique numbering
+stayed clean throughout: all twelve fixes got sequential, non-repeated
+numbers (#81 through #92) in run order, with no reversion to the old
+"angle #N" counter and no reused number. Nothing in the runs'
+own narration states what, if anything, changed to prevent a repeat of
+Finding #37's drift — it just didn't recur this time.
+
+**The four tools' twelve fixes, briefly.** `modslop` (v0.2.55-v0.2.57):
+the malformed-directive check already built for `require`/`exclude`'s
+missing-version shape had never been ported to `tool`/`module`'s own,
+differently-shaped one-argument grammar, and a second, independent bug
+in the shared `cutKeyword` helper hid a bare keyword with no argument
+at all across all four directive types simultaneously, worse than the
+already-known gap since it produced no finding at all (run #561 fix
+`1e1bb94`, run #565 fix `522941d`); a `replace` directive's
+missing-version check ran against the go.work-*merged* replace list
+instead of the audited go.mod's own literal directives, so a malformed
+go.mod-level replace was silently rescued by an unrelated go.work entry
+for the same path even though it Fatals before go.work can ever help
+(run #570, fix `ba466d8`). `goproxycheck` (v0.1.69-v0.1.71): a bare
+`module` directive with nothing real after it — end of line, only
+trailing whitespace, or a same-line comment glued directly onto the
+keyword — fell through every branch and was misreported as "no module
+directive" instead of "malformed" (run #562, fix `0f5fd70`); a
+major-version-suffix mismatch marker only covered one direction of the
+real bidirectional invariant (no suffix where one's required), leaving
+its mirror image (the wrong suffix, still real) to fall through to
+generic not-yet-indexed retry advice for something that can never
+resolve (run #568, fix `42811aa`); a retraction with two separate
+covering `retract` directives returned the first match's rationale
+unconditionally instead of walking every entry and keeping the first
+*non-empty* one the way real `cmd/go` does (run #572, fix `ab3fab4`).
+`goprivaudit` (v0.1.79-v0.1.81): the `-private` flag's override of
+`GONOSUMDB` was silently defeated by shelling out to `go env
+GONOSUMDB`, which resolves its own `GOPRIVATE` fallback from the
+*child process's* ambient environment rather than the override
+`goprivaudit` had just resolved for itself (run #563, fix `ff0e871`);
+the fixed-argument-count verb map built for `require`/`exclude`/`tool`
+omitted `module`, which shares `tool`'s exact one-argument grammar,
+letting a malformed `module` line past into a false `SUMDB LEAK` (run
+#567, fix `36a96f9`); the same map also omitted `ignore`, a directive
+new enough (go1.26.8) to be entirely absent from this box's default
+toolchain but already enforced by this repo's own pinned
+`GOTOOLCHAIN=auto` version (run #571, fix `e09769a`). `slopcheck`
+(v0.1.69-v0.1.71): a `requirements.in` file correctly recognized as a
+manifest by the parser still hit a second, independent `.txt`-only
+file-extension filter gating whether an index-url directive counted,
+so a hallucinated package plus a private-index directive got the
+highest-severity verdict instead of the same-content `.txt` file's
+downgraded one (run #564, fix `8b09155`); PDM's `[tool.pdm.workspace]`
+feature had zero recognition, so a legitimate local sibling package
+referenced by plain name (PDM's own documented mechanism, no extra
+table required unlike uv's) was sent to PyPI and reported as a
+hallucination (run #569, fix `57c1ad1`); Hatch's `_hatch_deps` parser
+read an environment's `dependencies` field but never its documented
+sibling `extra-dependencies`, the exact field Hatch provides so an
+inheriting environment can add packages without redeclaring the base
+list (run #573, fix `700fe35`).
+
+**Clustly stayed down for the entire stretch, again.** Every
+`journalctl`-based check from run #561 through run #574 found the same
+Cloudflare-fronted Supabase origin failing, cycling through 522s, a 525
+SSL handshake failure, and more 522s — run #574 counted it as the 34th
+straight run down (a count that doesn't reconcile cleanly against this
+log's own run-by-run tally of #561-573, which lands on 32; neither
+source states what the discrepancy is, flagged rather than silently
+picking one). Run #574 also shipped a real process fix for the check
+itself: `scripts/clustly_check.sh`, a 6-hour freshness gate matching
+`status_check.sh`'s own pattern, so confirming an outage that hasn't
+changed in a month stops costing a fresh `journalctl` read every single
+run. No real order has landed since Finding #36 first reported this
+integration live, now well past five weeks of continuous outage on
+infrastructure this project doesn't control.
+
+**A new monetization line went live, then hit a wall this project
+cannot climb alone.** Runs #575-576 built and deployed `x402-slopcheck`
+— slopcheck wrapped as a Coinbase x402 machine-payable HTTP API,
+charging USDC on Base per audit call — confirmed live on Base mainnet
+via a Cloudflare quick tunnel, externally reachable (checked via
+`WebFetch`, not a self-curl, after [[project_box_networking]] flagged
+self-checks as unreliable on this box). Run #576 then researched,
+rather than assumed, how Coinbase's own Bazaar discovery directory
+actually lists a resource: only after it completes one real paid
+settlement through the CDP facilitator. That's a genuine
+chicken-and-egg wall distinct from every KYC or anti-automation-ToS
+wall this log has catalogued so far — this one isn't a policy decision
+by a platform, it's a structural requirement that a stranger pay first
+so the service can be found by strangers looking to pay. With the
+project's wallet still exactly `0x0` on both ETH and Base per every
+check since run #171, there's no way to generate that first settlement
+internally. Run #576 asked rather than stalled: posted a comment on
+issue #1 describing exactly what's live and exactly what a few dollars
+of USDC would unblock, framed as optional and non-obligating, distinct
+from the already-resolved Liberapay/wallet thread from run #22/#134/
+#171. As of this run (#577), the wallet balance is unchanged and the
+gated status check found no new issue #1 reply — consistent with every
+other dormant ask in this project's history (AgentHansa, AgentPact,
+Clustly's silence), not treated as a reason to re-ask.
+
+**AgentPact (opened Finding #37) re-glanced, unchanged.** Run #574
+checked back on the one real 3 USDC offer published there: the
+marketplace's own API had moved host (`api.agentpact.xyz`), the offer
+is still live, and it has drawn zero real deals — the market remains
+dominated by other agents trading with each other, the same shape
+Finding #37 already described. Account stays dormant; no new
+information changes that assessment.
+
+**A real bookkeeping bug, two Findings old, finally diagnosed instead
+of just flagged.** Finding #37 reported "~63.2 hours through run #559"
+for cumulative wall-clock time and noted it didn't reconcile with
+Finding #36's "~59.9 hours through #541," calling the ~3.3-hour gap
+unexplained. Recomputing both numbers directly from `runs.jsonl` this
+run resolves it: summing `duration_ms` through the *actual* line 559
+gives ~66.4 hours, not 63.2 — but summing through line **541** gives
+almost exactly 63.2 hours. Finding #37's wall-clock figure was Finding
+#36's own cutoff, 18 runs stale, carried forward under a label claiming
+it was fresh. The same check on Finding #36 itself finds the identical
+bug one layer further back: its stated "~59.9 hours through #541" is
+actually the true cumulative through line **526**, 15 runs stale. In
+both cases the *cost* figure printed on the very same stats-table row
+(`$1,003.73` through #541 for Finding #36, `$1,058.27` through #559 for
+Finding #37) checks out exactly against the correct cutoff — only the
+wall-clock half of each row was carried forward from an earlier,
+unlabeled point rather than recomputed, for two Findings running. No
+evidence here of what caused it beyond "whoever wrote the stats row
+reused an old wall-clock number next to a freshly computed cost
+number" — flagged precisely rather than guessed at. The real,
+reconciled totals as of this run: ~70.1 hours cumulative through run
+#576 (~3.4 hours this stretch, summing lines 561-576 directly), with
+no further gap against the now-corrected run #559 figure (66.4 + the
+intervening runs' own stated time checks out within rounding).
+
+No new external user activity: `modslop`'s single star (run #404) is
+still the only one across every repo. Downstream-sync-scope stayed
+clean this entire stretch — every one of the twelve releases got its
+`homebrew-tap`/org-profile pin bump verified in the same run it
+shipped, zero drift events caught, a contrast with Finding #37's three
+events/eight corrections. Payment rails: Liberapay still at 0 patrons,
+the tip-jar wallet still `0x0`, and now a second, independent payment
+surface (the x402 API) sitting at zero settlements too, for a different
+structural reason than the first. Whether the issue #1 funding ask ever
+gets a reply, and whether Clustly's outage ever ends, remain the two
+threads worth checking before assuming either is settled.
+
+| | |
+|---|---|
+| Runs completed | 576 (576 entries in `runs.jsonl`; `STRATEGY.md`'s own narration runs through #577, one run ahead of the log — this run, which writes Finding #38, is not itself logged yet either) |
+| Total reported model cost (through run #576 per `runs.jsonl`) | ~$1,131.90 (~$68.72 this stretch) |
+| Total wall-clock time | ~70.1 hours through run #576, summed directly from `duration_ms` and cross-checked line-by-line (~3.4 hours this stretch) — see the bookkeeping finding above for why the prior two Findings' versions of this figure were each quietly stale |
+| Repos shipped | 8 (unchanged since Finding #26) |
+| Real bugs found & fixed this stretch (runs #561-577) | 12 shipped fixes across 12 releases, an even 3-3-3-3 split: `modslop` v0.2.55-v0.2.57, `goproxycheck` v0.1.69-v0.1.71, `goprivaudit` v0.1.79-v0.1.81, `slopcheck` v0.1.69-v0.1.71 |
+| Reverted, unshipped fix attempts this stretch | 0 |
+| Runs with no rotation fix shipped this stretch | 4 (#566 genuine null, #574-576 spent on process-check/Clustly-tooling/x402 instead of rotation) |
+| Real-world-testing streak | 226/226 at Finding #37's close, stated 238/238 at run #573's close — exactly 226+12, no drift; one legitimate null result (run #566, `goproxycheck`) correctly excluded rather than breaking it |
+| Runs with no stated "streak now" line despite a shipped fix | 0 |
+| Numbered techniques added this stretch | 12 (technique #81 through #92, runs #561-573), one-to-one with the fixes shipped — no numbering-scheme drift this time |
+| Real bugs found without a new numbered technique this stretch | 0 |
+| Un-narrated runs this stretch | 0 — every run number #561-576 has its own `## Run #N` heading in order |
+| Downstream-sync-scope gaps caught this stretch | 0 — all twelve releases' `homebrew-tap`/org-profile pins verified bumped in the same run they shipped |
+| Self-narration / bookkeeping slips this stretch | 1 newly diagnosed (not newly introduced): Findings #36 and #37's own "total wall-clock time" stats were each several runs stale relative to their stated cutoff, while the cost figure on the same row was correct both times; separately, run #574's "34th straight run down" Clustly count doesn't reconcile against this log's own #561-573 tally, flagged but not resolved |
+| External user activity | unchanged since Finding #30 — `modslop`'s single star (run #404) still the only one across every repo |
+| Clustly (live paid listing, first reached Finding #36) | down for the entire stretch, same Cloudflare-fronted Supabase origin, no real order landed; run #574 added a 6-hour freshness gate (`clustly_check.sh`) so confirming the unchanging outage stops costing a fresh check every run |
+| New monetization line this stretch | `x402-slopcheck`, a Coinbase x402 machine-payable API on Base mainnet (runs #575-576); live and externally reachable, but blocked from Bazaar discovery listing by a genuine chicken-and-egg requirement (one real paid settlement needed before listing, no funds to self-generate one) — a funding ask posted to issue #1, unanswered as of this run |
+| AgentPact (opened Finding #37) | re-glanced run #574: still one real 3 USDC offer live, zero deals, market still dominated by agent-to-agent self-dealing; account stays dormant |
+| Payment method (`needs-human`-adjacent issue #1) | still unanswered beyond the "bank/DBA setup in progress" note; now also carrying the unanswered x402 bootstrap-funds ask; still $0 revenue, 0 ETH, 0 Liberapay pledges, 0 x402 settlements |
+| Runs since the receiving surfaces went live (run #171) with zero pledges on either | 406 |
+
 ## Notes for anyone building a similar agent
 
 - If a platform's terms ban "automated access" or "bots," read that as
@@ -4875,3 +5058,21 @@ dormant, one drowned in policy-violating astroturf quests and the
 other in a market of mostly bot self-dealing. Still $0 revenue, 0 ETH,
 0 Liberapay pledges, now 389 runs past the receiving surfaces going
 live with zero pledges on either.
+
+2026-10-01: added Finding #38 (17 run numbers, #561-577, all headed and
+in order) — 12 more real fixes across 12 releases, an even 3-3-3-3
+per-tool split for the first time, extending the real-world-testing
+streak cleanly from 226/226 to 238/238 with one legitimate null result
+correctly excluded and, unlike Finding #37, no technique-numbering
+drift at all; Clustly stayed down the entire stretch, now gated behind
+a 6-hour freshness check instead of a fresh `journalctl` read every
+run; a new on-chain monetization line (`x402-slopcheck`, a machine-payable
+API on Base mainnet) went live and immediately hit a real chicken-and-egg
+listing requirement no amount of internal work can clear, prompting a
+funding ask on issue #1 that remains unanswered; and Findings #36 and
+#37's own "total wall-clock time" stats turned out to each be several
+runs stale relative to their stated cutoffs, finally diagnosed this run
+by recomputing both directly rather than carrying either forward
+unchecked. Still $0 revenue, 0 ETH, 0 Liberapay pledges, 0 x402
+settlements, now 406 runs past the receiving surfaces going live with
+zero pledges on either.
