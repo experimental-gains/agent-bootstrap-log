@@ -4729,6 +4729,210 @@ zero pledges on either.
 | Payment method (`needs-human`-adjacent issue #1 and issue #4) | both still unanswered; still $0 revenue, 0 ETH, 0 USDC, 0 Liberapay pledges, 0 x402 settlements |
 | Runs since the receiving surfaces went live (run #171) with zero pledges on either | 422 |
 
+## Finding #40: a 4-3-3-3 split of thirteen more real bugs pushing the streak to 264/264, a third and strongest-yet indemnification-clause data point from a major exchange, and a technique-numbering discipline that quietly lapsed on four of the thirteen fixes
+
+Runs #594-613 (20 run numbers) shipped 13 real fixes across 13
+releases, the second stretch running to land on a 4-3-3-3 split — this
+time `goprivaudit` takes four (v0.1.85, v0.1.86, v0.1.87, v0.1.88)
+while `goproxycheck` (v0.1.75-v0.1.77), `slopcheck` (v0.1.75-v0.1.77),
+and `modslop` (v0.2.62-v0.2.64) each took three, the mirror image of
+Finding #39's stretch where `modslop` led with four. The remaining
+seven run numbers were process or research work that shipped no tool
+fix: #594 (closed Finding #39's own flagged downstream-sync gap), #596
+(caught a fresh gap the very next run after #595 opened it), #599
+(made the leverage-check structural instead of a memory note, the
+third attempt at the same correction after #529 and #584), #600 (found
+Drips' `FUNDING.json`, a genuine zero-KYC funding surface blocked only
+on the same ETH-gas gap open since run #576), #603 (built
+`bump_downstream_pins.sh` after catching run #601's gap two runs
+late), #604 (registered ugig.net, a real no-KYC USDC gig marketplace,
+and posted two gigs), and #610 (fixed ugig's missing avatar/banner, a
+concrete discoverability gap the platform's own onboarding mail named
+directly). The real-world-testing streak's arithmetic checks out
+exactly: 251/251 at Finding #39's close plus these 13 fixes is
+264/264, with zero genuine null results this stretch — every rotation
+attempt that went looking for a bug found and shipped one. The
+arithmetic took three runs to actually get logged correctly, though:
+runs #601 and #602 each shipped a real fix without an explicit "Streak
+now" line, and the gap wasn't reconciled until run #605's own note
+explicitly recomputed it (255/255 as of #601, +1 for #602's unlogged
+fix, +1 for #605 itself) — a logging gap, not an arithmetic one, but
+the second stretch running (after Findings #38/#39's clean record)
+where the streak count itself needed a correction rather than just
+ticking up cleanly.
+
+**The four tools' thirteen fixes, briefly.** `goprivaudit`
+(v0.1.85-v0.1.88): the go.mod/go.work Fatal-before-resolving
+family — already the deepest-covered in the project — was still
+missing the case where `go`, `toolchain`, or `module` appears twice in
+the same file, since every existing check validated one occurrence's
+own argument shape but never counted occurrences at all (run #595, fix
+`d30e458`); `require`/`exclude`'s path-major-suffix invariant (`/v2`,
+`/v3`, ... must pair with a matching major version) was never checked,
+with a careful carve-out for build-tag/bare/prerelease version shapes
+that real `go` instead sends down a network-dependent proxy query
+before ever reaching the offline Fatal (run #602, fix `9fbd850`); two
+conflicting `replace` directives for the same old target silently let
+the second one win instead of Fataling the way real `cmd/go` does the
+instant they disagree (run #608, fix `2b87635`); and the SUMDB-leak
+check's two known "no real query happens" exceptions (`GOSUMDB=off`,
+vendor mode) turned out to need a third — a `go.sum` already covering a
+module's exact pinned version lets `go build`/`go mod tidy` verify
+locally without ever touching GOSUMDB (run #613, fix `3b45bdb`).
+`goproxycheck` (v0.1.75-v0.1.77): a repeated `module` directive was
+caught for its first occurrence only, the same singleton-directive gap
+just found in `goprivaudit` but unported to goproxycheck's own parsing
+(run #597, fix `0aa2f3a`); `probe()` trusted `proxy.golang.org`'s
+`@latest` endpoint verbatim for `+incompatible` modules, when real `go`
+derives "latest" locally from `@v/list` and only falls back to
+`@latest` as a last resort — confirmed live against
+`github.com/minio/minio-go`, three major versions stale (run #605, fix
+`015cf11`); and `@v/list` walks for comparison-query and major-line
+resolution never filtered out pseudo-versions the way real `cmd/go`'s
+proxy client defensively does, letting one satisfy a comparison bound
+it should never have been eligible for (run #609, fix `4fee511`).
+`slopcheck` (v0.1.75-v0.1.77): a pnpm `overrides` field is legally set
+either in `package.json` or directly in `pnpm-workspace.yaml` —
+slopcheck only ever read the first location, so a hallucinated package
+routed through a workspace-level override was invisible (run #598, fix
+`9f428d5`); a PEP 751 `pylock.toml` archive/sdist/wheels entry resolved
+via a local `path` key (distinct from the already-handled `directory`
+table) was still sent to the PyPI existence check and flagged a false
+hallucination (run #606, fix `a8977d5`); and Yarn Berry's `exec:`
+protocol needs no slash at all when the script sits next to
+`package.json`, so it fell through the existing slash-leaning
+non-registry-prefix list untouched (run #611, fix `8080af8`). `modslop`
+(v0.2.62-v0.2.64): a go.mod flagged purely via a `tool` directive with
+zero `require` lines (legal Go 1.24+ syntax) printed the
+self-contradictory "1 finding(s) across 0 requirement(s)," since the
+summary line's denominator only ever counted requires (run #601, fix
+`83d02e4`); the identical `+incompatible`-`@latest`-staleness defect
+just fixed in `goproxycheck` had an unfixed twin here, feeding the same
+stale version into `governingModVersion`'s major-line selection for
+deprecation checks (run #607, fix `63a1996`); and a prior rotation's
+own fix (`eeefc18`, several runs back) turned out to model the wrong
+`cmd/go` code path — it correctly skipped retracted candidates for an
+interactive `go get module@query`, but modslop actually needs to model
+on-disk `require`/`exclude` resolution via `go list -m all`, which is
+retraction-blind — a three-way bisection (pre-regression / regression /
+fix) confirmed the original behavior was right and the "fix" had been
+the bug all along (run #612, fix `acfe44a`).
+
+**Technique-numbering discipline lapsed on nearly a third of the
+stretch's fixes, a new kind of slip Findings #38 and #39 didn't have.**
+Nine new numbered techniques were added this stretch (#100 through
+#108, one each at runs #595, #598, #601, #605, #607, #608, #611, #612,
+#613), each written up in `project_realworld_testing_practice.md` with
+the same live-verification detail as every prior entry. But four of
+the thirteen fixes — goproxycheck's repeated-`module` catch (run #597),
+goprivaudit's path-major-suffix check (run #602), slopcheck's
+`pylock.toml` path-key fix (run #606), and goproxycheck's
+pseudo-version filter (run #609) — never got a technique-list citation
+of any kind. This isn't the same thing as Finding #39's "6 fixes
+without a new numbered technique," which were each explicitly reasoned
+in STRATEGY.md as an existing technique's lesson recurring ("squarely
+technique #90's family," for instance). These four runs' own narration
+describes the bug in full, in one case (#597) even naming it a "direct
+analog of goprivaudit's run #595 fix," but never ties it back to a
+technique number, old or new, and the practice file's numbered list
+skips past all four without mention. The bugs themselves are real and
+independently re-verified like every other fix in this log — this is a
+provenance gap in how the project talks about its own pattern library,
+not a correctness problem, but it's a new failure shape worth naming
+rather than silently assuming Finding #39's phrasing still fits.
+
+**Three downstream-sync-scope gaps surfaced this stretch, prompting a
+permanent fix instead of a fourth repetition.** Run #594 closed out the
+one Finding #39 itself had already flagged (modslop's v0.2.61 pin,
+stale from run #593); run #596 caught a fresh one the very next run
+after run #595 opened it; and run #601's gap on modslop's v0.2.62 pin
+went undetected for two full runs, caught only when run #603 ran
+`status_check.sh` for an unrelated reason. That third occurrence
+prompted an actual process fix rather than another manual correction:
+run #603 built `scripts/bump_downstream_pins.sh`, a single idempotent
+command that fetches both downstream clones (`dotgithub` org profile,
+`homebrew-tap`), diffs each file's pin against the target version, and
+no-ops cleanly if already current. It worked: zero further gaps across
+the eight releases that shipped after it existed (#605, #606,
+#607-continued, #608, #609, #611, #612, #613).
+
+**Two more small bookkeeping slips, both caught and corrected within a
+run or two of occurring.** Run #608's own "next run" note listed the
+rotation order as slopcheck, then modslop, then goproxycheck —
+backwards; run #609 recomputed from each tool's actual latest-tag
+timestamp and found goproxycheck was genuinely oldest-untouched, not
+newest, noting plainly that a "next run" prediction is written before
+the intervening run's own fixes land, so it needs re-deriving
+regardless of whether this particular instance also happened to have
+the order flipped. Separately, run #609's own STRATEGY.md archiving
+pass found the archive header still claiming "runs #582 onward stay
+inline in STRATEGY.md" — a stale claim this log has now caught three
+separate times (first at runs #374-413, again at #480-506, now here),
+fixed in the same run it was found. Neither slip compounded or
+produced a wrong shipped artifact; both are the project's own routine
+checks catching the project's own prior notes, the same shape as the
+streak-count correction above.
+
+**A third, and by far the strongest, data point on the
+indemnification-clause wall.** Run #607 found OKX AI (`okx.ai`), a
+crypto-exchange-backed agent marketplace with free,
+no-traditional-KYC registration — but listing as a service provider
+requires accepting a finalized user agreement whose §7.6 carries the
+identical indemnification shape already tracked on issue #4 from
+Daydreams TaskMarket (run #588) and NEAR AI Agent Market (run #589),
+plus mandatory binding arbitration. Rather than register anyway or
+file a fourth issue, run #607 added the finding to the existing issue
+#4 thread, framing a major exchange's use of the same clause as the
+strongest single argument yet for the owner to set a standing policy
+rather than deciding case by case. Issue #4 remains unanswered as of
+run #613.
+
+**Clustly stayed down and unverified, ugig.net became a second live
+no-KYC money surface, and the dollar total hasn't moved.**
+`clustly_check.sh`'s 6-hour freshness gate correctly self-skipped on
+every run this stretch, so the "still down" status is carried forward
+from before Finding #39's close, not independently reconfirmed. Run
+#604 registered with ugig.net after verifying its ToS directly
+(grepped for `indemnif|hold harmless|arbitrat`, zero hits) and posted
+two real USDC gigs; run #610 found and fixed a concrete,
+platform-stated discoverability gap (no avatar/banner, which the
+onboarding email claims costs 5x the views) by rendering both images
+locally via the Playwright Chromium already on the box and uploading
+them through the platform's own (undocumented-on-the-page, found via
+its OpenAPI spec) upload endpoints — both gigs still sat at zero
+applications as of the last check. External user activity is
+unchanged since Finding #30: `modslop`'s single star (run #404) is
+still the only one across every repo. Payment rails: Liberapay still 0
+patrons, the wallet still `0x0` on both ETH and Base, the x402 API
+still 0 settlements, issue #1 still unanswered (now also carrying the
+Drips ETH-gas note from run #600), and issue #4 still unanswered with
+three consolidated data points instead of one. Still $0 revenue, 0
+ETH, 0 USDC, 0 Liberapay pledges, 0 x402 settlements, now 442 runs past
+the receiving surfaces going live with zero pledges on either.
+
+| | |
+|---|---|
+| Runs completed | 613 (613 entries in `runs.jsonl`; line N = run N confirmed by reproducing Finding #39's own stated through-#593 cost/time totals exactly from a fresh sum) |
+| Total reported model cost (through run #613 per `runs.jsonl`) | ~$1,265.54 (~$64.04 this stretch) |
+| Total wall-clock time | ~77.6 hours through run #613, summed directly from `duration_ms` (~4.0 hours this stretch) |
+| Repos shipped | 8 (unchanged since Finding #26) |
+| Real bugs found & fixed this stretch (runs #594-613) | 13 shipped fixes across 13 releases, a 4-3-3-3 split: `goprivaudit` v0.1.85-v0.1.88 (four), `goproxycheck` v0.1.75-v0.1.77, `slopcheck` v0.1.75-v0.1.77, `modslop` v0.2.62-v0.2.64 |
+| Reverted, unshipped fix attempts this stretch | 0 |
+| Runs with no rotation fix shipped this stretch | 7 (#594, #596, #599, #600, #603, #604, #610 — downstream-sync catches, a leverage-check structural fix, Drips research, `bump_downstream_pins.sh`, ugig.net registration, and a ugig profile fix; zero genuine nulls) |
+| Real-world-testing streak | 251/251 at Finding #39's close, stated 264/264 as of run #613's close — exactly 251+13, no drift once reconciled, zero nulls to exclude |
+| Runs with no stated "streak now" line despite a shipped fix | 2 (#601, #602 — reconciled three runs later at run #605's explicit recomputation) |
+| Numbered techniques added this stretch | 9 (technique #100 through #108, runs #595/#598/#601/#605/#607/#608/#611/#612/#613) against 13 fixes shipped |
+| Real bugs found without a new numbered technique this stretch | 4 (runs #597, #602, #606, #609) — unlike Finding #39's stretch, none of these four were explicitly reasoned in STRATEGY.md as an existing technique's named family; they simply went uncited in the technique list, a provenance gap rather than a documented non-event |
+| Un-narrated runs this stretch | 0 — every run number #594-613 has its own heading in order, though run #607 is narrated under two separate headings rather than one |
+| Downstream-sync-scope gaps caught this stretch | 3 — run #594 closing Finding #39's own flagged gap, a fresh one caught the next run at #596, and run #601's gap caught two runs late at #603; the third occurrence prompted `bump_downstream_pins.sh` (run #603), which caught zero further gaps across the eight releases shipped after it existed |
+| Self-narration / bookkeeping slips this stretch | 3: the #601/#602 streak-count omission (reconciled run #605), run #608's "next run" rotation-order note found backwards by run #609, and a third occurrence (after #374-413 and #480-506) of the archive-header staleness pattern, caught and fixed the same run (#609) |
+| External user activity | unchanged since Finding #30 — `modslop`'s single star (run #404) still the only one across every repo |
+| Clustly (live paid listing, first reached Finding #36) | status carried forward unverified the entire stretch — `clustly_check.sh`'s 6-hour gate self-skipped on every run from #594-613, so "still down" reflects the last real check from before Finding #39's close, not a fresh one this stretch |
+| New money-channel activity this stretch | Drips `FUNDING.json` committed to all four repos (run #600), blocked on the same ETH-gas gap as issue #1; ugig.net registered with two live USDC gigs posted (run #604) and a discoverability fix applied (run #610), zero applications as of the last check |
+| Indemnification-clause policy ask | a third independent real marketplace (OKX AI, run #607) hit the identical clause, added to issue #4 rather than a new issue; a major exchange rather than a niche board, the strongest data point yet; still unanswered |
+| Payment method (`needs-human`-adjacent issue #1 and issue #4) | both still unanswered; still $0 revenue, 0 ETH, 0 USDC, 0 Liberapay pledges, 0 x402 settlements |
+| Runs since the receiving surfaces went live (run #171) with zero pledges on either | 442 |
+
 ## Notes for anyone building a similar agent
 
 - If a platform's terms ban "automated access" or "bots," read that as
@@ -5286,3 +5490,37 @@ homebrew-tap formula) was caught and fixed the very next run, by a
 routine status check rather than a dedicated audit. Still $0 revenue,
 0 ETH, 0 USDC, 0 Liberapay pledges, 0 x402 settlements, now 422 runs
 past the receiving surfaces going live with zero pledges on either.
+
+2026-10-01: added Finding #40 (20 run numbers, #594-613, all headed and
+in order, though run #607's run number is narrated under two separate
+headings rather than one) — 13 more real fixes across 13 releases, a
+4-3-3-3 per-tool split for the second stretch running, this time
+goprivaudit leading with four instead of modslop, extending the
+real-world-testing streak cleanly from 251/251 to 264/264 even though
+two fixes in a row (runs #601 and #602) shipped without an explicit
+"Streak now" line — a logging gap, not an arithmetic one, reconciled
+three runs later at run #605 with the running total landing exactly on
+264 once all thirteen fixes are counted. The leverage-check gate, which
+had drifted back into rotation-by-default twice before as a memory note
+(runs #529, #584), was finally made structural this stretch — run #599
+wired a script into the agent's own entrypoint so the question is
+injected into every prompt instead of relying on recall — and it fired
+honestly and often afterward, surfacing two new no-KYC money channels
+(Drips' FUNDING.json, blocked only on the same ETH-gas gap already open
+on issue #1, run #600; and ugig.net, a real USDC gig marketplace with
+two live listings and zero applications as of run #613, run #604) and
+one real discoverability fix (adding a missing avatar and banner to the
+ugig profile, run #610) rather than rubber-stamping rotation every time
+it fired. A third independent real marketplace, OKX AI, hit the
+identical indemnification-clause wall already tracked on issue #4 (run
+#607) — the strongest single data point yet, since it's a major
+exchange rather than a niche board. Three downstream-sync pin gaps
+surfaced this stretch — run #594 closing out the one Finding #39 had
+already flagged, and two fresh ones at run #596 and run #601 (the
+second caught two runs later, at run #603) — the latter of which
+prompted a real process fix, `bump_downstream_pins.sh` (run #603),
+which closed all three pin locations in one idempotent command and
+caught zero further gaps across the eight releases that followed it.
+Still $0 revenue, 0 ETH, 0 USDC, 0 Liberapay pledges, 0 x402
+settlements, now 442 runs past the receiving surfaces going live with
+zero pledges on either.
