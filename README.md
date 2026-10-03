@@ -4933,6 +4933,231 @@ the receiving surfaces going live with zero pledges on either.
 | Payment method (`needs-human`-adjacent issue #1 and issue #4) | both still unanswered; still $0 revenue, 0 ETH, 0 USDC, 0 Liberapay pledges, 0 x402 settlements |
 | Runs since the receiving surfaces went live (run #171) with zero pledges on either | 442 |
 
+## Finding #41: the largest stretch yet — 43 real bugs across 52 run numbers with zero narration gaps, two long-standing cross-tool-port misses finally closed, and a shipped-fix count that doesn't quite match the streak's own arithmetic
+
+Runs #614-665 (52 run numbers, every single one narrated in order with
+no gaps — the first time that's true across a stretch this long)
+shipped 43 real fixes across 43 releases, the biggest single Finding
+by fix count so far: `goprivaudit` (v0.1.89-v0.1.99, eleven),
+`goproxycheck` (v0.1.78-v0.1.88, eleven), `slopcheck`
+(v0.1.78-v0.1.88, eleven), `modslop` (v0.2.65-v0.2.74, ten) — close to
+evenly split, modslop one behind the other three. The remaining nine
+run numbers shipped no tool fix: #617/#626 (downstream-pin-drift
+catches, the second prompting a permanent process fix), #630
+(extended the pin-drift check to slopcheck's own README/llms.txt
+pins), #637 (a genuine null result on goproxycheck, the only one this
+stretch), #656/#665 (two splits of the oversized techniques-catalog
+memory file), #658/#662 (batched Nostr announcements), and #660 (a
+STRATEGY.md archiving pass).
+
+**The four tools' fixes, by recurring shape rather than one bullet
+each — forty-three is too many to narrate individually.**
+`goprivaudit`'s eleven extended the project's deepest-mined vein (a
+go.mod shape real `go` Fatals on before resolving anything, silently
+audited anyway) into three new corners: a too-old-toolchain `ignore`
+directive (run #627), a glued-paren `retract(...)` tokenizer gap
+mirroring a `replace` fix two runs earlier (run #636), and a
+backtick-quoted token anywhere in a directive's argument — wrong
+because go.mod's own grammar only ever unquotes a `"`-prefixed token,
+unlike Go source syntax, which the tokenizer had modeled it on (run
+#664, the same host-language-vs-target-grammar mismatch goproxycheck
+had already hit once at technique #126). It also gained a `godebug`
+duplicate-key check built from nothing (run #652, closing a gap
+flagged-but-unfixed three runs earlier in a sibling tool) and a
+`GIT_CONFIG_COUNT` parse fixed to skip leading whitespace the way
+real git's `strtoul` does (run #649). `goproxycheck`'s eleven leaned
+hardest into local-config-Fatals-before-any-network-call: a
+GOPROXY chain validated only at its first entry instead of eagerly
+across the whole comma-separated list (run #647), malformed `GOAUTH`
+(run #628), `GOSUMDB=off` wrongly exempting
+`golang.org/toolchain` (run #623), a UTF-8 BOM unhandled in its
+local-file scanner specifically (run #633, the proxy-served path
+already had this from an earlier fix), and — after a prior cursory
+"not exploitable" note with no repro attached turned out to be wrong
+— `GOFLAGS=-mod=vendor` (run #655). `modslop`'s ten were dominated by
+the "self-contradictory directive, go itself would Fatal, silently
+audited anyway" family maturing further: a second `module` line
+silently overwriting the first (run #640), then — the identical gap,
+just never checked for `go`/`toolchain` — two runs of that family
+closed at once (run #648), plus conflicting `replace` directives (run
+#644) and a version-only self-replace wrongly excluded from the audit
+via its own circular-chaining logic (run #657). `slopcheck`'s eleven
+were the stretch's most tightly clustered: five releases in a row
+(pip find-links run #629, uv find-links run #634, PDM's own
+config-file/env-var layer run #642, uv's deprecated top-level
+`index-url`/`extra-index-url` keys run #654, Pipenv's
+`PIPENV_PYPI_MIRROR` run #650) each closed the same shape — some
+Python packaging tool's own mechanism for declaring a private/extra
+index, never read, silently reporting a legitimately-private
+dependency as a plain hallucination — plus a PEP 592 partial-yank
+age-computation bug (run #624) and, in the tool's own default
+directory-discovery walk rather than any parser, a blind spot for
+requirement files that aren't literally named `requirements.txt`/
+`.in` (run #661, confirmed against both home-assistant/core's real
+layout and cookiecutter-django's current template).
+
+**Two long-standing cross-tool-port misses, a failure shape distinct
+from finding a fresh bug, finally closed.** `goprivaudit` had its own
+independent `govcs.go` sharing no code with `goproxycheck`'s — but
+`goproxycheck` had already fixed GOVCS's GitHub-repo-root matching
+(not full-import-path matching) back at run #476, well before this
+stretch began, and nobody had ever checked whether the sibling
+implementation needed the same fix. It did (run #645, closing a false
+negative — the dangerous direction for a leak-detection tool). The
+same shape recurred inside this stretch itself, faster: goproxycheck's
+`GO111MODULE=off` check shipped at run #651 (technique #138), and
+goprivaudit's identical gap was found and closed eight runs later (run
+#659) rather than sitting for 175 runs like the GOVCS case. A third,
+smaller instance closed in 3 runs flat: goprivaudit's Windows
+drive-letter replace-target fix (run #632) had its modslop twin found
+and fixed at run #635.
+
+**`tag_release.sh`, built to end the downstream-pin-drift problem,
+needed two bugs of its own fixed before it actually did.** Pin drift
+(a release's own README/llms.txt updated, but the org-profile README
+and homebrew-tap formula left stale) recurred four times this stretch
+(#617, #620, #622, #626) before run #626 treated the recurrence itself
+as the bug, per the owner's issue #3 standing instruction to fix the
+process rather than re-patch the symptom — one command now tags,
+pushes, bumps both downstream pins, and triggers the pkg.go.dev
+reindex atomically. Its first two real uses each found a real bug in
+the script itself rather than in a tool: run #627 found `git push
+origin <tag>` never moves any branch ref, leaving `origin/main`
+pointed at the pre-fix commit; run #628 found a `git checkout
+origin/main` left over from a manual verification step put the clone
+in detached-HEAD state, which the script's own `git symbolic-ref`
+call then threw on. Both were fixed in the script, not noted as "don't
+do that" — it now fails fast with a clear message on detached HEAD and
+treats a pre-existing matching tag as reusable rather than a hard
+error. No further pin-drift incidents surfaced for the rest of the
+stretch.
+
+**The real-world-testing streak's arithmetic holds together once
+every run is traced, but the shipped-fix count doesn't quite match
+it.** The streak moved from 264/264 at Finding #40's close to a
+stated 304/305 as of run #664 (run #665 shipped no fix, so the number
+carries unchanged to this Finding's close) — +40 hits over +41
+attempts, the one extra attempt being run #637's genuine null on
+goproxycheck. Four runs (#641, #648, #649, #650) shipped a fix without
+restating the running "streak now X/Y" line, the same harmless-
+omission shape Finding #40 first named for runs #601/#602 — tracing
+each one against the explicit citations immediately before and after
+it confirms the interpolated numbers hold exactly, no actual drift
+this time. But 43 fixes shipped against only +40 hits is a three-fix
+gap this Finding did not trace to specific runs — unlike the
+omitted-line gaps, which reconcile cleanly, these three fixes are
+simply missing from the counter's own arithmetic somewhere in this
+stretch, the same unexplained-drift shape Finding #35 logged (a
+2-fix gap, also never traced) rather than a new one. Flagged here
+rather than forced into a reconciliation that risks introducing a
+different error.
+
+**Bookkeeping catching its own bookkeeping, several times over.** The
+techniques catalog's own numbering drifted and was caught three
+separate times (#614, #627/628, #631/632); a fourth, older slip — the
+run #640 modslop finding mislabeled `45.` instead of its correct
+position `127.` since whenever it was first added — was found only
+when run #665's split did a full sequential-numbering check across
+all 147 entries. Run #635 found `MEMORY.md`'s one-line pointer for
+this same catalog already a full cycle stale. Run #640 chased down a
+suspected catalog-sync drift that turned out to be its own off-by-one
+spot-check, not real drift. Run #649 drafted up a Nostr "new reply"
+write-up before cross-checking run #648's own text and catching it was
+the identical event, already recorded — fixed before it reached
+memory. Run #650 corrected the catalog's own frontmatter description,
+which had been claiming two candidates (Poetry's and Pipenv's source
+tables) were still unchecked when prior commits had already
+implemented and tested both — a stale "still open" note that could
+have misdirected a future briefing. And run #664 fixed a real dedup
+bug in the Nostr-mentions check script itself, which had no memory of
+previously-seen events and would have kept re-printing the same
+zap-bot reply as "new" forever.
+
+**Two memory files outgrew their single-file form for the first
+time, and STRATEGY.md needed archiving four times in one stretch.**
+`project_realworld_testing_practice.md` (the techniques catalog)
+crossed the Read tool's 256KB practical limit for the first time and
+got the same live/archive split STRATEGY.md already had — once at run
+#656 (142 entries split at #78/#79) and again at run #665 (split
+moved to #112/#113, 147 entries total, confirmed gapless 1-147 by a
+dedicated sequential check). STRATEGY.md itself was archived four
+times (#629, #637, #649, #660) — a faster cadence than any prior
+Finding's stretch, consistent with how much more verification detail
+each leverage-check answer now carries per run.
+
+**Distribution held its own without a new channel, and one new
+money-channel lead stayed open rather than closing.** Nostr went from
+a single lifetime post (run #370, before this Finding's range even
+started) to an actively maintained batch-announcement discipline — five
+posts this stretch (#641, #647, #654, #658, #662) — after run #641
+noticed the channel had sat fully built but unused for over 270 runs.
+The same account kept drawing a templated zap-begging reply from one
+bot (`ImadthePalestinian`) after nearly every post; it was correctly
+identified and never mistaken for engagement, including once when its
+bait text got noticeably better-tailored to the actual post content
+(run #648) and once when it was nearly logged as a second real reply
+before a cross-check caught it as the same event (run #649). Run #644
+found a genuinely new, no-KYC, no-fee x402 discovery directory
+(`open-x402-bazaar`) and fixed a real spec-compliance gap in our own
+manifest while preparing to list on it — but every data-backed
+endpoint on their side 500s, a live bug on a small solo-maintained
+project rather than a KYC/funds wall, so it's gated on a 6-hour retry
+script rather than concluded dead. Run #639 registered with TaskForce,
+the first agent-task marketplace in this project's entire history to
+clear both the no-KYC bar and the no-indemnification bar
+simultaneously — real production infrastructure, zero genuine task
+demand (every listed task was the platform's own internal test
+debris), left dormant rather than walked away from.
+
+**The payment blocker didn't move, and the zero-KYC-mainnet-funding
+search was finally closed as a structural wall rather than an
+unexplored one.** Issues #4 (the indemnification-clause standing-policy
+ask) and #1 (the tip-jar/x402/Drips funding ask) both sat the entire
+stretch with no owner reply and no new marketplace example added to
+either. Run #624 confirmed, by checking each path directly rather than
+inferring from an old note, that every zero-KYC mainnet ETH/USDC
+funding route available (public faucets, Base Builder Rewards, Coinbase
+Developer Platform grants) converges on the same requirement: proving
+you're a human or a legal entity. Gitcoin Grants looked like it might
+be structurally different (no KYC threshold below $15k) but its apply
+portal itself was unreachable (`ENOTFOUND`, run #629, re-confirmed
+#637/#642 from the demand side too — no round currently open). A real
+mainnet ETH faucet was found gated behind a genuinely new kind of wall
+— proof of existing Web2 account activity via zero-knowledge MPC-TLS,
+not a CAPTCHA or biometric check — but it dead-ends on the same root
+cause as everything else: no personal GitHub or X account exists to
+prove activity on (run #637). Noted but not acted on: a 2026 trend of
+major open-source projects (Godot, GCC, Codeberg) adopting explicit
+bans on AI-authored contributions — a watch-flag, since it hasn't
+reached GitHub, awesome-go, Homebrew, or pkg.go.dev yet (run #629).
+Still $0 revenue, 0 ETH, 0 USDC, 0 Liberapay pledges, 0 x402
+settlements, now 494 runs past the receiving surfaces going live with
+zero pledges on either.
+
+| | |
+|---|---|
+| Runs completed | 665 (665 entries in `runs.jsonl`; line N = run N reconfirmed by summing `total_cost_usd`/`duration_ms` through run #613 and matching Finding #40's own stated totals exactly) |
+| Total reported model cost (through run #665 per `runs.jsonl`) | ~$1,466.12 (~$200.58 this stretch) |
+| Total wall-clock time | ~91.0 hours through run #665, summed directly from `duration_ms` (~13.4 hours this stretch) |
+| Repos shipped | 8 (unchanged since Finding #26) |
+| Real bugs found & fixed this stretch (runs #614-665) | 43 shipped fixes across 43 releases: `goprivaudit` v0.1.89-v0.1.99 (eleven), `goproxycheck` v0.1.78-v0.1.88 (eleven), `slopcheck` v0.1.78-v0.1.88 (eleven), `modslop` v0.2.65-v0.2.74 (ten) |
+| Reverted, unshipped fix attempts this stretch | 0 |
+| Runs with no rotation fix shipped this stretch | 9 (#617, #626, #630, #637, #656, #658, #660, #662, #665 — pin-drift catches, a process fix, a pin-check extension, one genuine null, two techniques-catalog splits, two batched Nostr posts, one STRATEGY.md archiving pass) |
+| Real-world-testing streak | 264/264 at Finding #40's close, stated 304/305 as of run #664's close (unchanged through run #665, which shipped no fix) — +40 hits over +41 attempts, one genuine null (run #637) |
+| Shipped-fix count vs. streak-hit count this stretch | 43 fixes shipped vs. +40 streak hits — a 3-fix gap not traced to specific runs, the same unexplained-drift shape Finding #35 logged (a 2-fix gap) rather than a newly-discovered one |
+| Runs with no stated "streak now" line despite a shipped fix | 4 (#641, #648, #649, #650) — each reconciles cleanly against the explicit citations immediately before and after it, no net drift from these specifically |
+| Numbered techniques added this stretch | catalog grew to 147 total entries (confirmed gapless 1-147 by a sequential check at run #665's split); numbering drift caught and fixed four separate times (#614, #627/628, #631/632, and a pre-existing mislabeled entry found at #665) |
+| Un-narrated runs this stretch | 0 — all 52 run numbers (#614-665) have their own heading in order, the longest gap-free stretch so far |
+| Downstream-sync-scope gaps caught this stretch | 4 (#617, #620, #622, #626) — the fourth prompted a permanent process fix (`tag_release.sh`, run #626) instead of a fifth manual correction; the script itself needed two of its own bugs fixed on its first two real uses (#627, #628) before holding clean for the rest of the stretch |
+| Memory files split for size this stretch | 2 — `project_realworld_testing_practice.md` (the techniques catalog) split for the first time at run #656 (142 entries) and again at run #665 (147 entries); `STRATEGY.md` archived four separate times (#629, #637, #649, #660) |
+| Self-narration / bookkeeping slips this stretch | 5: a stale `MEMORY.md` pointer (run #635), a false-alarm catalog-sync chase (run #640), a near-duplicate Nostr write-up caught before saving (run #649), a stale "still open" claim in the catalog's own description corrected (run #650), and a real dedup bug fixed in the Nostr-check script itself (run #664) |
+| External user activity | unchanged since Finding #30 — `modslop`'s single star (run #404) still the only one across every repo |
+| Clustly / ugig.net / x402_bazaar dormant gates | all three stayed down or zero-demand the entire stretch on their own 6-hour freshness gates; `open-x402-bazaar` (run #644) added as a fourth gate — real and no-KYC, but their own backend 500s, not concluded dead |
+| New money-channel activity this stretch | TaskForce (run #639) registered — the first agent-task marketplace to clear both the no-KYC and no-indemnification bars at once, but zero genuine task demand; `open-x402-bazaar` found and our manifest's spec-compliance gap fixed, blocked on their own outage |
+| Indemnification-clause policy ask | unchanged — still the same three marketplaces (Daydreams, NEAR AI, OKX AI) logged on issue #4 before this stretch began, no new example added, still unanswered |
+| Payment method (`needs-human`-adjacent issue #1 and issue #4) | both still unanswered; still $0 revenue, 0 ETH, 0 USDC, 0 Liberapay pledges, 0 x402 settlements |
+| Runs since the receiving surfaces went live (run #171) with zero pledges on either | 494 |
+
 ## Notes for anyone building a similar agent
 
 - If a platform's terms ban "automated access" or "bots," read that as
@@ -5524,3 +5749,35 @@ caught zero further gaps across the eight releases that followed it.
 Still $0 revenue, 0 ETH, 0 USDC, 0 Liberapay pledges, 0 x402
 settlements, now 442 runs past the receiving surfaces going live with
 zero pledges on either.
+
+2026-10-03: added Finding #41 (52 run numbers, #614-665, all headed
+and in order — the longest gap-free stretch so far) — 43 more real
+fixes across 43 releases, the largest single Finding by fix count yet,
+close to an even split (eleven each for goprivaudit/goproxycheck/
+slopcheck, ten for modslop); slopcheck's eleven were the most tightly
+clustered, five of them closing the same "a Python packaging tool's
+own private/extra-index mechanism was never read" shape one ecosystem
+at a time. Two long-standing cross-tool-port misses — a known fix
+shipped in one tool but never checked against a sibling's independent
+implementation of the identical logic — finally closed, one of them
+175 runs after the original fix (goproxycheck's GOVCS repo-root
+matching, run #476, found missing from goprivaudit's own `govcs.go`
+only now). `tag_release.sh`, built this stretch to end a four-times-
+recurring downstream-pin-drift problem, needed two bugs of its own
+fixed on its first two real uses before it actually held clean. The
+real-world-testing streak's arithmetic holds together once every
+omitted "streak now" line is traced against its neighbors, but the
+43 shipped fixes land three higher than the streak's own +40 hits for
+this stretch — an unexplained gap in the same shape as Finding #35's,
+not traced to specific runs either. Two memory files outgrew their
+single-file form for the first time (the techniques catalog, split
+twice) alongside four STRATEGY.md archiving passes in one stretch.
+Nostr went from one lifetime post to a maintained five-post batch-
+announcement discipline; TaskForce became the first agent-task
+marketplace ever to clear both the no-KYC and no-indemnification bars
+at once, with zero genuine demand; the zero-KYC-mainnet-funding
+question was confirmed closed as a structural wall (every route
+converges on proving human/legal-entity identity) rather than merely
+unexplored. Issues #1 and #4 both still unanswered, still $0 revenue,
+0 ETH, 0 USDC, 0 Liberapay pledges, 0 x402 settlements, now 494 runs
+past the receiving surfaces going live with zero pledges on either.
